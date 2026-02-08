@@ -84,3 +84,51 @@ class SheetsService:
                     logger.info(f"Обновлено поле {field} для заказа {order_id}")
         except Exception as e:
             logger.error(f"Ошибка обновления Листа 1: {e}")
+    
+    async def update_analytics_to_sheet2(self, values: List[int], percentages: List[str]):
+        """Обновить Лист 2 с аналитикой.
+        
+        Args:
+            values: Список значений (9 элементов)
+            percentages: Список процентов (9 элементов)
+        """
+        try:
+            worksheet = await self.spreadsheet.worksheet(settings.SHEET2_NAME)
+            
+            # Получить текущие значения
+            all_values = await worksheet.get_all_values()
+            
+            # Если таблица пуста или недостаточно строк, создаём структуру
+            if len(all_values) < 3:
+                headers = [
+                    '',
+                    'Зашли в бот',
+                    'Запустили бот',
+                    'Нажали кнопку 1',
+                    'Нажали кнопку 2',
+                    'Нажали кнопку 3',
+                    'Нажали кнопку 4',
+                    'Нажали кнопку 5',
+                    'Нажали кнопку 6',
+                    'Нажали кнопку 7'
+                ]
+                
+                # Очистить лист и заполнить заново
+                await worksheet.clear()
+                await worksheet.append_row(headers)
+                await worksheet.append_row(['Кол-во'] + values)
+                await worksheet.append_row(['%'] + percentages)
+                
+                logger.info("Создана новая структура Листа 2")
+            else:
+                # Обновляем строку с количеством (строка 2)
+                values_row = ['Кол-во'] + values
+                await worksheet.update(f'A2:J2', [values_row])
+                
+                # Обновляем строку с процентами (строка 3)
+                percentages_row = ['%'] + percentages
+                await worksheet.update(f'A3:J3', [percentages_row])
+                
+                logger.info(f"Лист 2 обновлён: кол-во={values}, %={percentages}")
+        except Exception as e:
+            logger.error(f"Ошибка обновления Листа 2: {e}")

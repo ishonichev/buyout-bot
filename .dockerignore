@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Docs
+README.md
+SETUP.md
+LICENSE
+
+# Temp files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Alembic
+alembic/versions/*.pyc

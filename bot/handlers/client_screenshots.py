@@ -11,6 +11,7 @@ from bot.database.models import User, Order, OrderStatus, AnalyticsEvent, Produc
 from bot.keyboards.client_keyboards import get_confirm_screenshot_keyboard
 from bot.states.client_states import ClientStates
 from bot.config import settings
+from bot.services.sheets_service import SheetsService
 
 logger = logging.getLogger(__name__)
 router = Router(name='client_screenshots')
@@ -91,7 +92,7 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
 
 
 @router.message(ClientStates.WAITING_BUY_SCREENSHOT, F.photo)
-async def buy_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User):
+async def buy_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Получен скриншот покупки."""
     data = await state.get_data()
     order_id = data.get('order_id')
@@ -108,7 +109,6 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
         await session.commit()
     
     # Записываем в Google Sheets (Лист 1)
-    sheets_service = message.bot.get('sheets_service')
     if sheets_service:
         await sheets_service.add_order_to_sheet1({
             'order_id': order_id,

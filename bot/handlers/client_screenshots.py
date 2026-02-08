@@ -108,7 +108,7 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
         await session.commit()
     
     # Записываем в Google Sheets (Лист 1)
-    sheets_service = message.bot['sheets_service']
+    sheets_service = message.bot.get('sheets_service')
     if sheets_service:
         await sheets_service.add_order_to_sheet1({
             'order_id': order_id,

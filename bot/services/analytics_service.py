@@ -1,7 +1,7 @@
 """Сервис аналитики."""
 from bot.services.sheets_service import SheetsService
 from bot.config import settings
-from bot.database.database import SessionLocal
+from bot.database.database import async_session_maker
 from sqlalchemy import select, func
 from bot.database.models import AnalyticsEvent
 from datetime import datetime
@@ -19,7 +19,7 @@ class AnalyticsService:
     async def track_event(self, user_id: int, event_type: str):
         """Зафиксировать событие в БД."""
         try:
-            async with SessionLocal() as session:
+            async with async_session_maker() as session:
                 from bot.database.models import AnalyticsEvent
                 
                 event = AnalyticsEvent(
@@ -43,7 +43,7 @@ class AnalyticsService:
             }
         """
         try:
-            async with SessionLocal() as session:
+            async with async_session_maker() as session:
                 # Подсчёт уникальных пользователей по каждому событию
                 event_types = [
                     'bot_visited',    # Зашли в бот

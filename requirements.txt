@@ -14,7 +14,7 @@ redis==5.2.1
 aioredis==2.0.1
 
 # Google Sheets
-gspread==6.1.4
+gspread==6.0.2
 gspread-asyncio==2.0.0
 google-auth==2.37.0
 google-auth-oauthlib==1.2.1

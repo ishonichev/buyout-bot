@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from datetime import datetime
 import logging
 
 from bot.database.models import Product, Order, OrderStatus, User
@@ -22,7 +23,7 @@ router = Router(name='admin')
 
 # Фильтр для проверки админа
 def is_admin(user_id: int) -> bool:
-    return user_id == settings.ADMIN_ID
+    return user_id in settings.admin_ids_list
 
 
 @router.message(Command("admin"))
@@ -210,16 +211,17 @@ async def toggle_product(callback: CallbackQuery, session: AsyncSession):
         product.is_active = not product.is_active
         await session.commit()
         
-        status = "✅ Активирован" if product.is_active else "❌ Деактивирован"
-        await callback.answer(f"Товар {status}", show_alert=True)
+        status_text = "✅ Активирован" if product.is_active else "❌ Деактивирован"
+        await callback.answer(f"Товар {status_text}", show_alert=True)
         
         # Обновляем клавиатуру
+        status = "✅ Активен" if product.is_active else "❌ Неактивен"
         text = (
             f"✏️ <b>Редактирование товара</b>\n\n"
             f"🏷 <b>Название:</b> {product.name}\n"
             f"🔗 <b>Ссылка:</b> {product.url[:50] if product.url else 'не установлена'}...\n"
             f"💰 <b>Кэшбэк:</b> {product.cashback_amount} ₽\n"
-            f"🟢 <b>Статус:</b> {✅ if product.is_active else ❌}"
+            f"🟢 <b>Статус:</b> {status}"
         )
         
         await callback.message.edit_text(

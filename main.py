@@ -1,6 +1,8 @@
 """Главный файл запуска бота для выкупов товаров."""
 import asyncio
 import logging
+import os
+from pathlib import Path
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
@@ -33,6 +35,10 @@ async def update_analytics_task(analytics_service: AnalyticsService):
 
 async def main():
     """Основная функция запуска бота."""
+    # Создать директорию для логов если не существует
+    logs_dir = Path('logs')
+    logs_dir.mkdir(exist_ok=True)
+    
     # Настройка логирования
     logging.basicConfig(
         level=logging.INFO if not settings.DEBUG else logging.DEBUG,

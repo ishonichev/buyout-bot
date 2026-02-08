@@ -67,6 +67,19 @@ async def main():
     bot = Bot(token=settings.BOT_TOKEN)
     dp = Dispatcher(storage=storage)
     
+    # Инициализация сервисов
+    sheets_service = SheetsService()
+    await sheets_service.initialize()
+    analytics_service = AnalyticsService(sheets_service)
+    
+    # Сохраняем сервисы в workflow_data для доступа из хэндлеров
+    dp.workflow_data.update({
+        'sheets_service': sheets_service,
+        'analytics_service': analytics_service
+    })
+    
+    logger.info("Сервисы инициализированы")
+    
     # Подключение middleware
     dp.update.middleware(DatabaseMiddleware())
     
@@ -75,17 +88,6 @@ async def main():
     dp.include_router(support.router)
     dp.include_router(client_screenshots.router)
     dp.include_router(client.router)
-    
-    # Инициализация сервисов
-    sheets_service = SheetsService()
-    await sheets_service.initialize()
-    analytics_service = AnalyticsService(sheets_service)
-    
-    # Сохраняем сервисы в bot для доступа из хэндлеров
-    bot['sheets_service'] = sheets_service
-    bot['analytics_service'] = analytics_service
-    
-    logger.info("Сервисы инициализированы")
     
     # Запуск фоновой задачи для аналитики
     analytics_task = asyncio.create_task(update_analytics_task(analytics_service))

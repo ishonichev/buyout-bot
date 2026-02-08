@@ -11,6 +11,7 @@ from bot.config import settings
 from bot.database.database import init_db
 from bot.handlers import client, admin, support, client_screenshots
 from bot.middlewares.db_middleware import DatabaseMiddleware
+from bot.middlewares.services_middleware import ServicesMiddleware
 from bot.services.analytics_service import AnalyticsService
 from bot.services.sheets_service import SheetsService
 
@@ -81,7 +82,8 @@ async def main():
     logger.info("Сервисы инициализированы")
     
     # Подключение middleware
-    dp.update.middleware(DatabaseMiddleware())
+    dp.update.middleware(ServicesMiddleware())  # Первым добавляем services
+    dp.update.middleware(DatabaseMiddleware())  # Потом database
     
     # Регистрация роутеров
     dp.include_router(admin.router)

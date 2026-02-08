@@ -7,13 +7,28 @@ from redis.asyncio import Redis
 
 from bot.config import settings
 from bot.database.database import init_db
-from bot.handlers import client, admin, support
+from bot.handlers import client, admin, support, client_screenshots
 from bot.middlewares.db_middleware import DatabaseMiddleware
 from bot.services.analytics_service import AnalyticsService
 from bot.services.sheets_service import SheetsService
 
 
 logger = logging.getLogger(__name__)
+
+
+async def update_analytics_task(analytics_service: AnalyticsService):
+    """Фоновая задача для обновления аналитики каждые 5 минут."""
+    while True:
+        try:
+            await asyncio.sleep(settings.ANALYTICS_UPDATE_INTERVAL)
+            logger.info("Запуск обновления аналитики...")
+            await analytics_service.update_analytics_sheet()
+        except asyncio.CancelledError:
+            logger.info("Фоновая задача аналитики остановлена")
+            break
+        except Exception as e:
+            logger.error(f"Ошибка в фоновой задаче аналитики: {e}")
+            await asyncio.sleep(60)  # Подождать минуту перед повтором
 
 
 async def main():
@@ -52,6 +67,7 @@ async def main():
     # Регистрация роутеров
     dp.include_router(admin.router)
     dp.include_router(support.router)
+    dp.include_router(client_screenshots.router)
     dp.include_router(client.router)
     
     # Инициализация сервисов
@@ -65,6 +81,10 @@ async def main():
     
     logger.info("Сервисы инициализированы")
     
+    # Запуск фоновой задачи для аналитики
+    analytics_task = asyncio.create_task(update_analytics_task(analytics_service))
+    logger.info("Фоновая задача аналитики запущена")
+    
     try:
         # Удаляем вебхук на случай если он был установлен
         await bot.delete_webhook(drop_pending_updates=True)
@@ -73,6 +93,13 @@ async def main():
         # Запуск бота
         await dp.start_polling(bot)
     finally:
+        # Остановка фоновой задачи
+        analytics_task.cancel()
+        try:
+            await analytics_task
+        except asyncio.CancelledError:
+            pass
+        
         await bot.session.close()
         await redis.close()
         logger.info("Бот остановлен")

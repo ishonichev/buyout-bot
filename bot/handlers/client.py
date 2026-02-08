@@ -25,7 +25,7 @@ router = Router(name='client')
 async def cmd_start(message: Message, session: AsyncSession, user: User):
     """Обработка команды /start."""
     # Аналитика: Зашли в бот
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_entered")
+    event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_visited")
     session.add(event)
     await session.commit()
     
@@ -46,8 +46,8 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
 @router.callback_query(F.data == "select_product")
 async def select_product(callback: CallbackQuery, session: AsyncSession, user: User):
     """Выбор товара."""
-    # Аналитика: Кнопка 1
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_1")
+    # Аналитика: Кнопка 1 - Запустили бот
+    event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
     session.add(event)
     await session.commit()
     
@@ -56,7 +56,7 @@ async def select_product(callback: CallbackQuery, session: AsyncSession, user: U
     products = result.scalars().all()
     
     await callback.message.edit_text(
-        "🛍selectbox Выберите товар для выкупа:",
+        "🛋️ Выберите товар для выкупа:",
         reply_markup=get_products_keyboard(products)
     )
     await callback.answer()
@@ -73,8 +73,8 @@ async def buy_product(callback: CallbackQuery, session: AsyncSession, user: User
     """Начало процесса выкупа."""
     product_id = int(callback.data.split(":")[1])
     
-    # Аналитика: Кнопка 2
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_2")
+    # Аналитика: Кнопка 2 - Нажали кнопку 1 (выбрали товар)
+    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_1")
     session.add(event)
     await session.commit()
     

@@ -27,6 +27,10 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
     # Аналитика: Зашли в бот
     event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_visited")
     session.add(event)
+    
+    # Аналитика: Запустили бот
+    event2 = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
+    session.add(event2)
     await session.commit()
     
     welcome_text = (
@@ -46,8 +50,8 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
 @router.callback_query(F.data == "select_product")
 async def select_product(callback: CallbackQuery, session: AsyncSession, user: User):
     """Выбор товара."""
-    # Аналитика: Кнопка 1 - Запустили бот
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
+    # Аналитика: Кнопка 1 - "Выбрать товар"
+    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_1")
     session.add(event)
     await session.commit()
     
@@ -73,8 +77,8 @@ async def buy_product(callback: CallbackQuery, session: AsyncSession, user: User
     """Начало процесса выкупа."""
     product_id = int(callback.data.split(":")[1])
     
-    # Аналитика: Кнопка 2 - Нажали кнопку 1 (выбрали товар)
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_1")
+    # Аналитика: Кнопка 2 - Выбор конкретного товара
+    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_2")
     session.add(event)
     await session.commit()
     

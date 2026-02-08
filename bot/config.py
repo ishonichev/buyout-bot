@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     
     # Telegram Bot
     BOT_TOKEN: str
-    ADMIN_ID: int
+    ADMIN_IDS: str  # Список ID через запятую, например: "123456789,987654321"
     
     # Database
     POSTGRES_HOST: str = "localhost"
@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     GOOGLE_SPREADSHEET_ID: str
     SHEET1_NAME: str = "Лист 1"
     SHEET2_NAME: str = "Лист 2"
+    
+    # Analytics
+    ANALYTICS_UPDATE_INTERVAL: int = 300  # Обновление аналитики каждые 5 минут (300 секунд)
     
     # Bot Configuration
     BOT_LANGUAGE: str = "ru"
@@ -47,9 +50,14 @@ class Settings(BaseSettings):
         )
     
     @property
+    def admin_ids_list(self) -> List[int]:
+        """Получить список ID администраторов."""
+        return [int(id.strip()) for id in self.ADMIN_IDS.split(",") if id.strip()]
+    
+    @property
     def moderator_ids(self) -> List[int]:
-        """Список ID модераторов (пока только админ)."""
-        return [self.ADMIN_ID]
+        """Список ID модераторов (включает всех админов)."""
+        return self.admin_ids_list
 
 
 settings = Settings()

@@ -1,58 +1,59 @@
-"""Клавиатуры для клиентской части."""
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+"""Клавиатуры для клиентской части бота."""
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from typing import List
-from bot.database.models import Product
 
 
-def get_main_menu_keyboard() -> InlineKeyboardMarkup:
-    """Главное меню бота."""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Выбрать товар для выкупа 🢒", callback_data="select_product")]
-    ])
-    return keyboard
+def get_main_menu():
+    """Главное меню."""
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="🛋️ Выбрать товар")
+    builder.button(text="❓ Есть вопросы")
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True)
 
 
-def get_products_keyboard(products: List[Product]) -> InlineKeyboardMarkup:
-    """Клавиатура выбора товара."""
-    buttons = []
+def get_products_keyboard(products: List):
+    """Клавиатура с товарами (инлайн для выбора)."""
+    builder = InlineKeyboardBuilder()
     
     for product in products:
         if product.is_active:
-            button_text = product.name
-            callback_data = f"buy:{product.id}"
+            builder.button(
+                text=f"📦 {product.name}",
+                callback_data=f"product:{product.id}"
+            )
         else:
-            # Пустая кнопка (невидимый символ)
-            button_text = "ㅤ"  # Корейский невидимый символ
-            callback_data = "empty"
-        
-        buttons.append([InlineKeyboardButton(text=button_text, callback_data=callback_data)])
+            builder.button(
+                text="❌ Нет в наличии",
+                callback_data="empty"
+            )
     
-    # Кнопка назад
-    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_main")])
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-    return keyboard
+    builder.button(text="⬅️ Назад", callback_data="back_to_main")
+    builder.adjust(1)
+    return builder.as_markup()
 
 
-def get_instruction_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура после инструкции."""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Я прочитал инструкцию и согласен с условиями", callback_data="agree_instruction")],
-        [InlineKeyboardButton(text="Есть вопросы", callback_data="has_questions")]
-    ])
-    return keyboard
+def get_agreement_keyboard():
+    """Клавиатура согласия с условиями."""
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="✅ Я согласен")
+    builder.button(text="❓ Есть вопросы")
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True)
 
 
-def get_confirm_screenshot_keyboard(step: str) -> InlineKeyboardMarkup:
-    """Клавиатура подтверждения отправки скриншота."""
-    step_texts = {
-        "basket": "Отправить скриншот товара в корзине 📸",
-        "buy": "Отправить скриншот покупки 💳",
-        "received": "Товар на руках 📦",
-        "review": "Скриншот опубликованного отзыва ⭐️"
-    }
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=step_texts.get(step, "Отправить"), callback_data=f"send_screenshot:{step}")]
-    ])
-    return keyboard
+def get_process_keyboard():
+    """Клавиатура в процессе выкупа."""
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="❌ Отменить прогресс")
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True)
+
+
+def get_cancel_keyboard():
+    """Клавиатура отмены."""
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="❌ Отменить")
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True)

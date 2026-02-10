@@ -50,7 +50,7 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, sheets_
     logger.info(f"Пользователь {user.tg_id} запустил бота")
 
 
-@router.message(F.text == "🛌️ Выбрать товар")
+@router.message(F.text.contains("Выбрать товар"))
 async def select_product(message: Message, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Выбор товара."""
     # Аналитика: Кнопка 1
@@ -70,7 +70,7 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     )
 
 
-@router.message(F.text == "❓ Есть вопросы")
+@router.message(F.text.contains("Есть вопросы"))
 async def ask_question(message: Message, user: User, session: AsyncSession):
     """Обработка вопросов пользователя."""
     admin_text = (

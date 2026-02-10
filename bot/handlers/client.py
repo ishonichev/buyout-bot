@@ -24,14 +24,14 @@ router = Router(name='client')
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Обработка команды /start."""
-    # Аналитика: Запустили бот (УБРАЛИ bot_visited)
+    # Аналитика: Запустили бот
     event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в памяти (мгновенно)
+    # Обновляем уникальных пользователей
     if sheets_service:
-        sheets_service.increment_analytics_event("bot_started")
+        sheets_service.increment_analytics_event("bot_started", user.tg_id)
     
     welcome_text = (
         "👋 Привет!\n\n"
@@ -59,7 +59,7 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_1")
+        sheets_service.increment_analytics_event("button_1", user.tg_id)
     
     result = await session.execute(select(Product).order_by(Product.id))
     products = result.scalars().all()
@@ -118,7 +118,7 @@ async def buy_product(callback: CallbackQuery, session: AsyncSession, user: User
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_2")
+        sheets_service.increment_analytics_event("button_2", user.tg_id)
     
     result = await session.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
@@ -184,7 +184,7 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_3")
+        sheets_service.increment_analytics_event("button_3", user.tg_id)
     
     await state.set_state(ClientStates.WAITING_BASKET_SCREENSHOT)
     

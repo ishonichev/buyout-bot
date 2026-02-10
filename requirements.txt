@@ -4,6 +4,10 @@ aiohttp==3.10.11
 pydantic==2.9.2
 pydantic-settings==2.7.1
 
+# Web Framework (for Web App API)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
 # Database
 asyncpg==0.30.0
 SQLAlchemy==2.0.37

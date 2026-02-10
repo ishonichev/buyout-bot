@@ -18,6 +18,7 @@ class SheetsService:
         self.spreadsheet = None
         self.sheet1 = None  # Лист "Заявки"
         self.sheet2 = None  # Лист "Аналитика"
+        self._order_rows = {}  # Кэш order_id -> row_number
         
     def get_creds(self):
         """Получение credentials для Google API."""
@@ -39,6 +40,7 @@ class SheetsService:
             # Получаем или создаем листы
             await self._ensure_sheets_exist()
             await self._ensure_headers_exist()
+            await self._build_order_cache()
             
             logger.info("Подключение к Google Sheets установлено")
         except Exception as e:
@@ -100,61 +102,71 @@ class SheetsService:
         if not first_row or len(first_row) < 2 or first_row[1] != "Зашли в бот":
             await self.sheet2.update('A1:J1', [sheet2_headers])
             await self.sheet2.update('A2', [["Кол-во"]])
-            await self.sheet2.update('A3', [["%"]])
+            await self.sheet2.update('A3', [["% "]])
             # Инициализируем нулями
             await self.sheet2.update('B2:J2', [[0] * 9])
             await self.sheet2.update('B3:J3', [["100%"] + ["0%"] * 8])
             logger.info("Заголовки Листа 2 созданы")
     
+    async def _build_order_cache(self):
+        """Построить кэш order_id -> номер строки."""
+        try:
+            all_values = await self.sheet1.get_all_values()
+            for i, row in enumerate(all_values[1:], start=2):  # Пропускаем заголовок
+                if len(row) > 0 and row[0].isdigit():
+                    order_id = int(row[0])
+                    self._order_rows[order_id] = i
+            logger.info(f"Кэш заказов построен: {len(self._order_rows)} записей")
+        except Exception as e:
+            logger.error(f"Ошибка построения кэша: {e}")
+    
     async def add_order_to_sheet1(self, order_data: Dict[str, Any]):
         """Добавление заявки в Лист 1."""
         try:
-            # Получаем все записи
-            all_values = await self.sheet1.get_all_values()
-            next_row = len(all_values) + 1
-            order_num = next_row - 1  # Номер заказа (минус заголовок)
-            
-            # Форматируем данные
+            order_id = order_data.get('order_id')
             username = order_data.get('username', 'Неизвестно')
-            if not username.startswith('@'):
-                username = f"@{username}" if username != 'Неизвестно' else username
-            
             basket_date = self._format_date(order_data.get('basket_date'))
             buy_date = self._format_date(order_data.get('buy_date'))
-            received_date = self._format_date(order_data.get('received_date', ''))
-            review_date = self._format_date(order_data.get('review_date', ''))
             cashback = order_data.get('cashback_amount', 0)
             
+            logger.info(f"[Sheets] Добавляю заказ #{order_id}: username={username}, basket={basket_date}, buy={buy_date}, cashback={cashback}")
+            
             row_data = [
-                order_num,
+                order_id,
                 username,
                 basket_date,
                 buy_date,
-                received_date,
-                review_date,
+                "",  # Выкуп (обновится позже)
+                "",  # Отзыв (обновится позже)
                 cashback
             ]
             
             await self.sheet1.append_row(row_data)
-            logger.info(f"Заявка #{order_num} добавлена в Лист 1")
+            
+            # Обновляем кэш
+            all_values = await self.sheet1.get_all_values()
+            row_num = len(all_values)  # Последняя строка
+            self._order_rows[order_id] = row_num
+            
+            logger.info(f"[Sheets] Заказ #{order_id} успешно добавлен в строку {row_num}")
             
         except Exception as e:
-            logger.error(f"Ошибка добавления заявки в Лист 1: {e}")
+            logger.error(f"[Sheets] Ошибка добавления заявки: {e}", exc_info=True)
     
-    async def update_order_in_sheet1(self, username: str, field: str, value: Any):
-        """Обновление существующей заявки в Листе 1."""
+    async def update_order_in_sheet1(self, order_id: int, field: str, value: Any):
+        """Обновление существующей заявки в Листе 1 по order_id."""
         try:
-            all_values = await self.sheet1.get_all_values()
-            
-            # Ищем строку с username
-            row_index = None
-            for i, row in enumerate(all_values[1:], start=2):  # Пропускаем заголовок
-                if len(row) > 1 and row[1] == username:
-                    row_index = i
-                    break
+            # Получаем номер строки из кэша
+            row_index = self._order_rows.get(order_id)
             
             if not row_index:
-                return
+                # Перестроить кэш и попробовать снова
+                await self._build_order_cache()
+                row_index = self._order_rows.get(order_id)
+                
+                if not row_index:
+                    logger.warning(f"[Sheets] Заказ #{order_id} не найден в таблице")
+                    return
             
             # Определяем колонку
             field_map = {
@@ -162,14 +174,20 @@ class SheetsService:
                 'review_date': 'F',    # Отзыв
             }
             
-            if field in field_map:
-                col = field_map[field]
-                formatted_value = self._format_date(value) if isinstance(value, datetime) else value
-                await self.sheet1.update(f'{col}{row_index}', [[formatted_value]])
-                logger.info(f"Обновлена ячейка {col}{row_index} для {username}")
+            if field not in field_map:
+                logger.warning(f"[Sheets] Неизвестное поле: {field}")
+                return
+            
+            col = field_map[field]
+            formatted_value = self._format_date(value) if isinstance(value, datetime) else value
+            
+            logger.info(f"[Sheets] Обновляю заказ #{order_id}: {field}={formatted_value} в ячейке {col}{row_index}")
+            
+            await self.sheet1.update(f'{col}{row_index}', [[formatted_value]])
+            logger.info(f"[Sheets] Успешно обновлено {col}{row_index}")
                 
         except Exception as e:
-            logger.error(f"Ошибка обновления заявки: {e}")
+            logger.error(f"[Sheets] Ошибка обновления заявки: {e}", exc_info=True)
     
     async def update_analytics_sheet2(self, analytics_data: Dict[str, int]):
         """Обновление аналитики в Листе 2."""
@@ -196,27 +214,25 @@ class SheetsService:
             
             # Вычисляем и обновляем проценты (строка 3)
             counts = [analytics_data.get(event, 0) for event in event_mapping.keys()]
-            total = counts[0] if counts[0] > 0 else 1  # Зашли в бот
             
             percentages = []
-            prev_count = total
+            prev_count = counts[0] if counts[0] > 0 else 1  # Зашли в бот
             
-            for count in counts:
-                if prev_count > 0:
+            for i, count in enumerate(counts):
+                if i == 0:
+                    percentages.append("100%")
+                elif prev_count > 0:
                     percentage = (count / prev_count) * 100
                     percentages.append(f"{percentage:.1f}%")
-                    prev_count = count
                 else:
                     percentages.append("0%")
-            
-            # Первый всегда 100%
-            percentages[0] = "100%"
+                prev_count = count
             
             await self.sheet2.update('B3:J3', [percentages])
-            logger.info("Аналитика в Листе 2 обновлена")
+            logger.info(f"[Sheets] Аналитика обновлена: {counts}")
             
         except Exception as e:
-            logger.error(f"Ошибка обновления аналитики: {e}")
+            logger.error(f"[Sheets] Ошибка обновления аналитики: {e}", exc_info=True)
     
     def _format_date(self, date_value) -> str:
         """Форматирование даты в строку."""

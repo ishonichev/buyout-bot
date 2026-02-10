@@ -1,7 +1,7 @@
 """Сервис для работы с Google Sheets."""
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Set
 import gspread_asyncio
 from google.oauth2.service_account import Credentials
 from bot.config import settings
@@ -20,16 +20,16 @@ class SheetsService:
         self.sheet1 = None  # Лист "Заявки"
         self.sheet2 = None  # Лист "Аналитика"
         
-        # Кэш аналитики в памяти (обновляется каждые 5 мин)
-        self.analytics_cache = {
-            'bot_started': 0,
-            'button_1': 0,
-            'button_2': 0,
-            'button_3': 0,
-            'button_4': 0,
-            'button_5': 0,
-            'button_6': 0,
-            'button_7': 0,
+        # Кэш УНИКАЛЬНЫХ пользователей для каждого события
+        self.unique_users: Dict[str, Set[int]] = {
+            'bot_started': set(),
+            'button_1': set(),
+            'button_2': set(),
+            'button_3': set(),
+            'button_4': set(),
+            'button_5': set(),
+            'button_6': set(),
+            'button_7': set(),
         }
         self._update_task = None
         
@@ -53,7 +53,7 @@ class SheetsService:
             # Получаем или создаем листы
             await self._ensure_sheets_exist()
             await self._ensure_headers_exist()
-            await self._load_analytics_from_sheet()
+            await self._load_unique_users_from_db()
             
             # Запускаем периодическое обновление (каждые 5 мин)
             self._update_task = asyncio.create_task(self._periodic_sync())
@@ -84,7 +84,7 @@ class SheetsService:
             self.sheet2 = await self.spreadsheet.add_worksheet(
                 title=settings.SHEET2_NAME,
                 rows=100,
-                cols=9  # УБРАЛИ 1 колонку
+                cols=9
             )
             logger.info(f"Создан лист '{settings.SHEET2_NAME}'")
         else:
@@ -100,7 +100,7 @@ class SheetsService:
             await self.sheet1.update('A1:G1', [sheet1_headers])
             logger.info("Заголовки Листа 1 созданы")
         
-        # Заголовки для Листа 2 (Аналитика) - УБРАЛИ "Зашли в бот"
+        # Заголовки для Листа 2 (Аналитика)
         sheet2_headers = [
             "",
             "Запустили бот", 
@@ -123,22 +123,27 @@ class SheetsService:
             await self.sheet2.update('B3:I3', [["100%"] + ["0%"] * 7])
             logger.info("Заголовки Листа 2 созданы")
     
-    async def _load_analytics_from_sheet(self):
-        """Загрузить текущие значения из таблицы."""
+    async def _load_unique_users_from_db(self):
+        """Загрузить уникальных пользователей из базы данных."""
         try:
-            row2 = await self.sheet2.row_values(2)
-            if len(row2) >= 9:
-                self.analytics_cache['bot_started'] = int(row2[1]) if row2[1] else 0
-                self.analytics_cache['button_1'] = int(row2[2]) if row2[2] else 0
-                self.analytics_cache['button_2'] = int(row2[3]) if row2[3] else 0
-                self.analytics_cache['button_3'] = int(row2[4]) if row2[4] else 0
-                self.analytics_cache['button_4'] = int(row2[5]) if row2[5] else 0
-                self.analytics_cache['button_5'] = int(row2[6]) if row2[6] else 0
-                self.analytics_cache['button_6'] = int(row2[7]) if row2[7] else 0
-                self.analytics_cache['button_7'] = int(row2[8]) if row2[8] else 0
-            logger.info(f"Аналитика загружена: {self.analytics_cache}")
+            from bot.database.database import async_session_maker
+            from bot.database.models import AnalyticsEvent
+            from sqlalchemy import select, func
+            
+            async with async_session_maker() as session:
+                # Получаем уникальные пары (user_id, event_type)
+                result = await session.execute(
+                    select(AnalyticsEvent.user_id, AnalyticsEvent.event_type)
+                    .distinct()
+                )
+                
+                for user_id, event_type in result:
+                    if event_type in self.unique_users:
+                        self.unique_users[event_type].add(user_id)
+                
+            logger.info(f"Уникальные пользователи загружены: {dict((k, len(v)) for k, v in self.unique_users.items())}")
         except Exception as e:
-            logger.error(f"Ошибка загрузки аналитики: {e}")
+            logger.error(f"Ошибка загрузки уникальных пользователей: {e}")
     
     async def _periodic_sync(self):
         """Периодическая синхронизация с Google Sheets (каждые 5 мин)."""
@@ -154,16 +159,16 @@ class SheetsService:
         try:
             logger.info("Синхронизация аналитики с Google Sheets...")
             
-            # Обновляем количество (строка 2)
+            # Обновляем количество (строка 2) - ТЕПЕРЬ УНИКАЛЬНЫЕ ПОЛЬЗОВАТЕЛИ
             counts = [
-                self.analytics_cache['bot_started'],
-                self.analytics_cache['button_1'],
-                self.analytics_cache['button_2'],
-                self.analytics_cache['button_3'],
-                self.analytics_cache['button_4'],
-                self.analytics_cache['button_5'],
-                self.analytics_cache['button_6'],
-                self.analytics_cache['button_7'],
+                len(self.unique_users['bot_started']),
+                len(self.unique_users['button_1']),
+                len(self.unique_users['button_2']),
+                len(self.unique_users['button_3']),
+                len(self.unique_users['button_4']),
+                len(self.unique_users['button_5']),
+                len(self.unique_users['button_6']),
+                len(self.unique_users['button_7']),
             ]
             
             await self.sheet2.update('B2:I2', [counts])
@@ -188,11 +193,13 @@ class SheetsService:
         except Exception as e:
             logger.error(f"Ошибка синхронизации: {e}")
     
-    def increment_analytics_event(self, event_type: str):
-        """ИНКРЕМЕНТ в ПАМЯТИ (быстро, не блокирует)."""
-        if event_type in self.analytics_cache:
-            self.analytics_cache[event_type] += 1
-            logger.info(f"📊 {event_type}: {self.analytics_cache[event_type]}")
+    def increment_analytics_event(self, event_type: str, user_id: int):
+        """ДОБАВИТЬ УНИКАЛЬНОГО пользователя в множество (быстро, не блокирует)."""
+        if event_type in self.unique_users:
+            was_new = user_id not in self.unique_users[event_type]
+            self.unique_users[event_type].add(user_id)
+            if was_new:
+                logger.info(f"📊 {event_type}: +1 уникальный пользователь (user_id={user_id}), всего: {len(self.unique_users[event_type])}")
     
     async def add_order_to_sheet1(self, order_data: Dict[str, Any]):
         """Добавление ПОЛНОЙ заявки в Лист 1 (только в конце!)."""

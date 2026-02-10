@@ -54,6 +54,7 @@ async def init_db():
                 product = Product(
                     id=i,
                     name=f"Товар {i}",
+                    url="",
                     cashback_amount=0,
                     is_active=False,
                     instruction_text="Инструкция не установлена"

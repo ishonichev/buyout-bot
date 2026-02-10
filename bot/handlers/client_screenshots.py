@@ -19,7 +19,7 @@ router = Router(name='client_screenshots')
 
 
 @router.message(ClientStates.WAITING_BASKET_SCREENSHOT, F.photo)
-async def basket_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User):
+async def basket_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Получен скриншот корзины."""
     data = await state.get_data()
     order_id = data.get('order_id')
@@ -43,6 +43,10 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
     session.add(event)
     await session.commit()
     
+    # Обновляем Лис2 в фоне
+    if sheets_service:
+        asyncio.create_task(sheets_service.increment_analytics_event("button_4"))
+    
     await message.answer(
         "✅ Скриншот корзины принят!\n\n"
         "📸 Теперь отправьте скриншот покупки"
@@ -51,7 +55,7 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
 
 
 @router.message(ClientStates.WAITING_BUY_SCREENSHOT, F.photo)
-async def buy_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User):
+async def buy_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Получен скриншот покупки."""
     data = await state.get_data()
     order_id = data.get('order_id')
@@ -75,6 +79,10 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
     session.add(event)
     await session.commit()
     
+    # Обновляем Лис2 в фоне
+    if sheets_service:
+        asyncio.create_task(sheets_service.increment_analytics_event("button_5"))
+    
     await message.answer(
         "✅ Скриншот покупки принят!\n\n"
         "📸 Теперь отправьте скриншот товара на руках"
@@ -83,7 +91,7 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
 
 
 @router.message(ClientStates.WAITING_RECEIVED_SCREENSHOT, F.photo)
-async def received_screenshot(message: Message, state: FSMContext, session: AsyncSession, user: User):
+async def received_screenshot(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Получен скриншот товара на руках."""
     data = await state.get_data()
     order_id = data.get('order_id')
@@ -107,6 +115,10 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     session.add(event)
     await session.commit()
     
+    # Обновляем Лис2 в фоне
+    if sheets_service:
+        asyncio.create_task(sheets_service.increment_analytics_event("button_6"))
+    
     review_text = (
         "👍 Отлично!\n\n"
         "📝 Добрый день!\n\n"
@@ -121,7 +133,7 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
 
 
 @router.message(ClientStates.WAITING_REVIEW_SCREENSHOT, F.photo)
-async def review_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User):
+async def review_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Получен скриншот отзыва."""
     data = await state.get_data()
     order_id = data.get('order_id')
@@ -143,6 +155,10 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_7")
     session.add(event)
     await session.commit()
+    
+    # Обновляем Лис2 в фоне
+    if sheets_service:
+        asyncio.create_task(sheets_service.increment_analytics_event("button_7"))
     
     await message.answer(
         "✅ Скриншот отзыва получен!\n\n"
@@ -172,7 +188,7 @@ async def payment_details_received(message: Message, state: FSMContext, session:
         order.payment_details = message.text
         await session.commit()
     
-    # ЗАПИСЫВАЕМ В GOOGLE SHEETS ЛИСТ1 ТОЛЬКО СЕЙЧАС (ПОЛНУЮ СТРОКУ!)
+    # ЗАПИСЫВАЕМ В GOOGLE SHEETS ЛИС1 ТОЛЬКО СЕЙЧАС (ПОЛНУЮ СТРОКУ!)
     if sheets_service and order:
         try:
             # Фоновая задача - не блокирует бота

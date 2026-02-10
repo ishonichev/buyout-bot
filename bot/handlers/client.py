@@ -188,28 +188,3 @@ async def agree_instruction(message: Message, state: FSMContext, session: AsyncS
         reply_markup=get_process_keyboard(),
         parse_mode="HTML"
     )
-
-
-@router.message(F.text == "❌ Отменить прогресс")
-async def cancel_progress(message: Message, state: FSMContext, session: AsyncSession, user: User):
-    """Отмена текущего заказа."""
-    data = await state.get_data()
-    order_id = data.get('order_id')
-    
-    if order_id:
-        # Отменяем заказ
-        result = await session.execute(select(Order).where(Order.id == order_id))
-        order = result.scalar_one_or_none()
-        if order:
-            order.status = OrderStatus.CANCELLED
-            await session.commit()
-    
-    await state.clear()
-    
-    await message.answer(
-        "❌ Заказ отменен.\n\n"
-        "Вы можете выбрать другой товар или обратиться к оператору.",
-        reply_markup=get_main_menu()
-    )
-    
-    logger.info(f"Пользователь {user.tg_id} отменил заказ {order_id}")

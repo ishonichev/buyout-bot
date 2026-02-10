@@ -53,6 +53,8 @@ class SheetsService:
             # Получаем или создаем листы
             await self._ensure_sheets_exist()
             await self._ensure_headers_exist()
+            
+            # Загружаем уникальных пользователей из БД
             await self._load_unique_users_from_db()
             
             # Запускаем периодическое обновление (каждые 5 мин)
@@ -117,7 +119,7 @@ class SheetsService:
         if not first_row or len(first_row) < 2 or first_row[1] != "Запустили бот":
             await self.sheet2.update('A1:I1', [sheet2_headers])
             await self.sheet2.update('A2', [["Кол-во"]])
-            await self.sheet2.update('A3', [["% "]])
+            await self.sheet2.update('A3', [["%"]])
             # Инициализируем нулями
             await self.sheet2.update('B2:I2', [[0] * 8])
             await self.sheet2.update('B3:I3', [["100%"] + ["0%"] * 7])
@@ -128,20 +130,21 @@ class SheetsService:
         try:
             from bot.database.database import async_session_maker
             from bot.database.models import AnalyticsEvent
-            from sqlalchemy import select, func
+            from sqlalchemy import select
             
             async with async_session_maker() as session:
                 # Получаем уникальные пары (user_id, event_type)
                 result = await session.execute(
-                    select(AnalyticsEvent.user_id, AnalyticsEvent.event_type)
-                    .distinct()
+                    select(AnalyticsEvent.user_id, AnalyticsEvent.event_type).distinct()
                 )
                 
-                for user_id, event_type in result:
+                rows = result.all()
+                for user_id, event_type in rows:
                     if event_type in self.unique_users:
                         self.unique_users[event_type].add(user_id)
                 
-            logger.info(f"Уникальные пользователи загружены: {dict((k, len(v)) for k, v in self.unique_users.items())}")
+            counts = {k: len(v) for k, v in self.unique_users.items()}
+            logger.info(f"Уникальные пользователи загружены: {counts}")
         except Exception as e:
             logger.error(f"Ошибка загрузки уникальных пользователей: {e}")
     
@@ -175,17 +178,17 @@ class SheetsService:
             
             # Пересчитываем проценты
             percentages = []
-            prev_count = counts[0] if counts[0] > 0 else 1
             
             for i, count in enumerate(counts):
                 if i == 0:
                     percentages.append("100%")
-                elif prev_count > 0:
-                    percentage = (count / prev_count) * 100
-                    percentages.append(f"{percentage:.1f}%")
                 else:
-                    percentages.append("0%")
-                prev_count = count
+                    prev_count = counts[i - 1] if i > 0 else 1
+                    if prev_count > 0:
+                        percentage = (count / prev_count) * 100
+                        percentages.append(f"{percentage:.1f}%")
+                    else:
+                        percentages.append("0%")
             
             await self.sheet2.update('B3:I3', [percentages])
             logger.info(f"Аналитика синхронизирована: {counts}")

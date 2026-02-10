@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     ADMIN_IDS: str  # Список ID через запятую, например: "123456789,987654321"
     
+    # Web App
+    WEBAPP_URL: str = "https://your-domain.com"  # URL для Telegram Web App
+    
     # Database
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432

@@ -6,7 +6,6 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import logging
-import asyncio
 
 from bot.database.models import User, Product, Order, OrderStatus, AnalyticsEvent
 from bot.keyboards.client_keyboards import (
@@ -25,19 +24,14 @@ router = Router(name='client')
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Обработка команды /start."""
-    # Аналитика: Зашли в бот
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_visited")
+    # Аналитика: Запустили бот (УБРАЛИ bot_visited)
+    event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
     session.add(event)
-    
-    # Аналитика: Запустили бот
-    event2 = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
-    session.add(event2)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
+    # Обновляем Лис2 в памяти (мгновенно)
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("bot_visited"))
-        asyncio.create_task(sheets_service.increment_analytics_event("bot_started"))
+        sheets_service.increment_analytics_event("bot_started")
     
     welcome_text = (
         "👋 Привет!\n\n"
@@ -59,16 +53,14 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, sheets_
 @router.message(F.text == "🛌️ Выбрать товар")
 async def select_product(message: Message, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Выбор товара."""
-    # Аналитика: Кнопка 1 - "Выбрать товар"
+    # Аналитика: Кнопка 1
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_1")
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("button_1"))
+        sheets_service.increment_analytics_event("button_1")
     
-    # Получаем все товары
     result = await session.execute(select(Product).order_by(Product.id))
     products = result.scalars().all()
     
@@ -81,7 +73,6 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
 @router.message(F.text == "❓ Есть вопросы")
 async def ask_question(message: Message, user: User, session: AsyncSession):
     """Обработка вопросов пользователя."""
-    # Уведомляем админов
     admin_text = (
         f"👤 Пользователь просит помощи!\n\n"
         f"🆔 ID: {user.tg_id}\n"
@@ -121,16 +112,14 @@ async def buy_product(callback: CallbackQuery, session: AsyncSession, user: User
     """Начало процесса выкупа."""
     product_id = int(callback.data.split(":")[1])
     
-    # Аналитика: Кнопка 2 - Выбор конкретного товара
+    # Аналитика: Кнопка 2
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_2")
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("button_2"))
+        sheets_service.increment_analytics_event("button_2")
     
-    # Получаем товар
     result = await session.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
     
@@ -194,9 +183,8 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("button_3"))
+        sheets_service.increment_analytics_event("button_3")
     
     await state.set_state(ClientStates.WAITING_BASKET_SCREENSHOT)
     

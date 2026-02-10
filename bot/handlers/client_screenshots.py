@@ -42,7 +42,7 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_4")
+        sheets_service.increment_analytics_event("button_4", user.tg_id)
     
     await message.answer(
         "✅ Скриншот корзины принят!\n\n"
@@ -75,7 +75,7 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_5")
+        sheets_service.increment_analytics_event("button_5", user.tg_id)
     
     await message.answer(
         "✅ Скриншот покупки принят!\n\n"
@@ -108,7 +108,7 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_6")
+        sheets_service.increment_analytics_event("button_6", user.tg_id)
     
     review_text = (
         "👍 Отлично!\n\n"
@@ -146,7 +146,7 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_7")
+        sheets_service.increment_analytics_event("button_7", user.tg_id)
     
     await message.answer(
         "✅ Скриншот отзыва получен!\n\n"

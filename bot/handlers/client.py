@@ -133,12 +133,18 @@ async def buy_product(callback: CallbackQuery, session: AsyncSession, user: User
     await session.commit()
     
     # Сохраняем данные в состояние
+    username = callback.from_user.username
+    if username:
+        username = f"@{username}"
+    else:
+        username = callback.from_user.full_name
+    
     await state.update_data(
         order_id=order.id,
         product_id=product.id,
         product_name=product.name,
         cashback_amount=product.cashback_amount,
-        username=message.from_user.username or message.from_user.full_name,
+        username=username,
         screenshots={}
     )
     

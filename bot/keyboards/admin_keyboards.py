@@ -7,9 +7,7 @@ from bot.database.models import Product
 def get_admin_main_keyboard() -> InlineKeyboardMarkup:
     """Главное меню админа."""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📝 Управление товарами", callback_data="admin:products")],
-        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin:stats")],
-        [InlineKeyboardButton(text="📩 Пендинг отзывы", callback_data="admin:pending_reviews")]
+        [InlineKeyboardButton(text="📝 Управление товарами", callback_data="admin:products")]
     ])
     return keyboard
 

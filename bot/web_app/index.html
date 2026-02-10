@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            padding: 20px;
+            padding-bottom: 80px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--tg-theme-hint-color);
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--tg-theme-hint-color);
+            font-size: 16px;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .tab.active {
+            color: var(--tg-theme-link-color);
+            border-bottom-color: var(--tg-theme-link-color);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--tg-theme-hint-color);
+        }
+        
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--tg-theme-hint-color);
+            border-radius: 8px;
+            background: var(--tg-theme-secondary-bg-color);
+            color: var(--tg-theme-text-color);
+            font-size: 16px;
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        .product-card {
+            background: var(--tg-theme-secondary-bg-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .product-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .product-name {
+            font-weight: 600;
+            font-size: 18px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: var(--tg-theme-hint-color);
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .toggle-switch.active {
+            background: var(--tg-theme-link-color);
+        }
+        
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+        
+        .toggle-switch.active::after {
+            left: 26px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            background: var(--tg-theme-button-color);
+            color: var(--tg-theme-button-text-color);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            width: 100%;
+        }
+        
+        .btn:active {
+            opacity: 0.8;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color);
+        }
+        
+        .hint {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color);
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛠 Админ-панель</h1>
+        
+        <div class="tabs">
+            <button class="tab active" data-tab="products">🛍️ Товары</button>
+            <button class="tab" data-tab="texts">📝 Тексты</button>
+        </div>
+        
+        <!-- Вкладка товаров -->
+        <div id="products-tab" class="tab-content active">
+            <div id="products-list" class="loading">Загрузка...</div>
+        </div>
+        
+        <!-- Вкладка текстов -->
+        <div id="texts-tab" class="tab-content">
+            <div id="texts-list" class="loading">Загрузка...</div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // API Base URL
+        const API_BASE = '/api';
+
+        // Переключение вкладок
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const targetTab = tab.dataset.tab;
+                
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(`${targetTab}-tab`).classList.add('active');
+            });
+        });
+
+        // Загрузка товаров
+        async function loadProducts() {
+            try {
+                const response = await fetch(`${API_BASE}/products`, {
+                    headers: {
+                        'Authorization': tg.initData
+                    }
+                });
+                const products = await response.json();
+                
+                const container = document.getElementById('products-list');
+                container.innerHTML = products.map(product => `
+                    <div class="product-card">
+                        <div class="product-header">
+                            <span class="product-name">${product.name || `Товар ${product.id}`}</span>
+                            <div class="toggle-switch ${product.is_active ? 'active' : ''}" 
+                                 onclick="toggleProduct(${product.id}, ${!product.is_active})">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Название</label>
+                            <input type="text" value="${product.name}" 
+                                   id="product-name-${product.id}">
+                        </div>
+                        <div class="form-group">
+                            <label>Инструкция</label>
+                            <textarea id="product-instruction-${product.id}">${product.instruction_text}</textarea>
+                            <div class="hint">Включите ссылку на товар, сумму кэшбэка и условия</div>
+                        </div>
+                        <button class="btn" onclick="saveProduct(${product.id})">💾 Сохранить</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading products:', error);
+                tg.showAlert('Ошибка загрузки товаров');
+            }
+        }
+
+        // Загрузка текстов
+        async function loadTexts() {
+            try {
+                const response = await fetch(`${API_BASE}/config`, {
+                    headers: {
+                        'Authorization': tg.initData
+                    }
+                });
+                const config = await response.json();
+                
+                const container = document.getElementById('texts-list');
+                container.innerHTML = Object.entries(config).map(([key, data]) => `
+                    <div class="form-group">
+                        <label>${data.description}</label>
+                        <textarea id="config-${key}">${data.value}</textarea>
+                        <button class="btn" onclick="saveConfig('${key}')" 
+                                style="margin-top: 8px;">💾 Сохранить</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading config:', error);
+                tg.showAlert('Ошибка загрузки настроек');
+            }
+        }
+
+        // Сохранение товара
+        async function saveProduct(id) {
+            const name = document.getElementById(`product-name-${id}`).value;
+            const instruction = document.getElementById(`product-instruction-${id}`).value;
+
+            try {
+                await fetch(`${API_BASE}/products/${id}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': tg.initData,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, instruction_text: instruction })
+                });
+                tg.showAlert('✅ Товар сохранен!');
+            } catch (error) {
+                tg.showAlert('❌ Ошибка сохранения');
+            }
+        }
+
+        // Переключение активности
+        async function toggleProduct(id, isActive) {
+            try {
+                await fetch(`${API_BASE}/products/${id}/toggle`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': tg.initData,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_active: isActive })
+                });
+                loadProducts();
+            } catch (error) {
+                tg.showAlert('Ошибка');
+            }
+        }
+
+        // Сохранение конфига
+        async function saveConfig(key) {
+            const value = document.getElementById(`config-${key}`).value;
+
+            try {
+                await fetch(`${API_BASE}/config/${key}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': tg.initData,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ value })
+                });
+                tg.showAlert('✅ Сохранено!');
+            } catch (error) {
+                tg.showAlert('❌ Ошибка');
+            }
+        }
+
+        // Инициализация
+        loadProducts();
+        loadTexts();
+    </script>
+</body>
+</html>

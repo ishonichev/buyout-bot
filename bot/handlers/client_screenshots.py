@@ -153,14 +153,9 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
         await session.commit()
     
     # Обновляем Google Sheets
-    if sheets_service:
-        username = message.from_user.username
-        if username:
-            username = f"@{username}"
-        else:
-            username = message.from_user.full_name
+    if sheets_service and order:
         try:
-            await sheets_service.update_order_in_sheet1(username, 'received_date', order.received_date)
+            await sheets_service.update_order_in_sheet1(order_id, 'received_date', order.received_date)
             logger.info(f"Обновлена дата получения для заказа {order_id}")
         except Exception as e:
             logger.error(f"Ошибка обновления Google Sheets: {e}")
@@ -208,13 +203,8 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
     
     # Обновляем Google Sheets
     if sheets_service:
-        username = message.from_user.username
-        if username:
-            username = f"@{username}"
-        else:
-            username = message.from_user.full_name
         try:
-            await sheets_service.update_order_in_sheet1(username, 'review_date', datetime.now())
+            await sheets_service.update_order_in_sheet1(order_id, 'review_date', datetime.now())
             logger.info(f"Обновлена дата отзыва для заказа {order_id}")
         except Exception as e:
             logger.error(f"Ошибка обновления Google Sheets: {e}")

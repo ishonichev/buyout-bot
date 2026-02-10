@@ -34,7 +34,7 @@ async def cmd_admin(message: Message):
         return
     
     await message.answer(
-        "🔑 <b>Админ-панель</b>\n\nВыберите действие:",
+        "🔑 Админ-панель\n\nВыберите действие:",
         reply_markup=get_admin_main_keyboard()
     )
 
@@ -50,7 +50,7 @@ async def admin_products(callback: CallbackQuery, session: AsyncSession):
     products = result.scalars().all()
     
     await callback.message.edit_text(
-        "📝 <b>Управление товарами</b>\n\nВыберите товар для редактирования:",
+        "📝 Управление товарами\n\nВыберите товар для редактирования:",
         reply_markup=get_products_list_keyboard(products)
     )
     await callback.answer()
@@ -75,11 +75,11 @@ async def edit_product(callback: CallbackQuery, session: AsyncSession):
     status = "✅ Активен" if product.is_active else "❌ Неактивен"
     
     text = (
-        f"✏️ <b>Редактирование товара</b>\n\n"
-        f"🏷 <b>Название:</b> {product.name}\n"
-        f"🔗 <b>Ссылка:</b> {product.url[:50] if product.url else 'не установлена'}...\n"
-        f"💰 <b>Кэшбэк:</b> {product.cashback_amount} ₽\n"
-        f"🟢 <b>Статус:</b> {status}"
+        f"✏️ Редактирование товара\n\n"
+        f"🏷 Название: {product.name}\n"
+        f"🔗 Ссылка: {product.url[:50] if product.url else 'не установлена'}...\n"
+        f"💰 Кэшбэк: {product.cashback_amount} ₽\n"
+        f"🟢 Статус: {status}"
     )
     
     await callback.message.edit_text(
@@ -217,11 +217,11 @@ async def toggle_product(callback: CallbackQuery, session: AsyncSession):
         # Обновляем клавиатуру
         status = "✅ Активен" if product.is_active else "❌ Неактивен"
         text = (
-            f"✏️ <b>Редактирование товара</b>\n\n"
-            f"🏷 <b>Название:</b> {product.name}\n"
-            f"🔗 <b>Ссылка:</b> {product.url[:50] if product.url else 'не установлена'}...\n"
-            f"💰 <b>Кэшбэк:</b> {product.cashback_amount} ₽\n"
-            f"🟢 <b>Статус:</b> {status}"
+            f"✏️ Редактирование товара\n\n"
+            f"🏷 Название: {product.name}\n"
+            f"🔗 Ссылка: {product.url[:50] if product.url else 'не установлена'}...\n"
+            f"💰 Кэшбэк: {product.cashback_amount} ₽\n"
+            f"🟢 Статус: {status}"
         )
         
         await callback.message.edit_text(
@@ -234,7 +234,7 @@ async def toggle_product(callback: CallbackQuery, session: AsyncSession):
 async def admin_back(callback: CallbackQuery):
     """Возврат в главное меню админки."""
     await callback.message.edit_text(
-        "🔑 <b>Админ-панель</b>\n\nВыберите действие:",
+        "🔑 Админ-панель\n\nВыберите действие:",
         reply_markup=get_admin_main_keyboard()
     )
     await callback.answer()
@@ -261,14 +261,14 @@ async def approve_review(callback: CallbackQuery, session: AsyncSession):
         try:
             await callback.bot.send_message(
                 order.user_id,
-                "✅ <b>Отличные новости!</b>\n\n"
+                "✅ Отличные новости!\n\n"
                 "Ваш отзыв одобрен! Кэшбэк будет перечислен в ближайшее время. 🙏"
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
         
         await callback.message.edit_text(
-            f"{callback.message.text}\n\n✅ <b>Отзыв одобрен</b>"
+            f"{callback.message.text}\n\n✅ Отзыв одобрен"
         )
         await callback.answer("✅ Отзыв одобрен")
 
@@ -299,6 +299,6 @@ async def reject_review(callback: CallbackQuery, session: AsyncSession):
             logger.error(f"Ошибка отправки уведомления: {e}")
         
         await callback.message.edit_text(
-            f"{callback.message.text}\n\n❌ <b>Отзыв отклонен</b>"
+            f"{callback.message.text}\n\n❌ Отзыв отклонен"
         )
         await callback.answer("❌ Отзыв отклонен")

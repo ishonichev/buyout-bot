@@ -106,13 +106,17 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
         else:
             username = message.from_user.full_name
             
-        await sheets_service.add_order_to_sheet1({
-            'order_id': order_id,
-            'username': username,
-            'basket_date': order.basket_date,
-            'buy_date': order.buy_date,
-            'cashback_amount': cashback_amount
-        })
+        try:
+            await sheets_service.add_order_to_sheet1({
+                'order_id': order_id,
+                'username': username,
+                'basket_date': order.basket_date,
+                'buy_date': order.buy_date,
+                'cashback_amount': cashback_amount
+            })
+            logger.info(f"Заказ {order_id} добавлен в Google Sheets")
+        except Exception as e:
+            logger.error(f"Ошибка записи в Google Sheets: {e}")
     
     # Аналитика: Кнопка 5
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_5")
@@ -155,7 +159,11 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
             username = f"@{username}"
         else:
             username = message.from_user.full_name
-        await sheets_service.update_order_in_sheet1(username, 'received_date', order.received_date)
+        try:
+            await sheets_service.update_order_in_sheet1(username, 'received_date', order.received_date)
+            logger.info(f"Обновлена дата получения для заказа {order_id}")
+        except Exception as e:
+            logger.error(f"Ошибка обновления Google Sheets: {e}")
     
     # Аналитика: Кнопка 6
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_6")
@@ -205,7 +213,11 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
             username = f"@{username}"
         else:
             username = message.from_user.full_name
-        await sheets_service.update_order_in_sheet1(username, 'review_date', datetime.now())
+        try:
+            await sheets_service.update_order_in_sheet1(username, 'review_date', datetime.now())
+            logger.info(f"Обновлена дата отзыва для заказа {order_id}")
+        except Exception as e:
+            logger.error(f"Ошибка обновления Google Sheets: {e}")
     
     # Аналитика: Кнопка 7
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_7")
@@ -318,15 +330,5 @@ async def payment_details_received(message: Message, state: FSMContext, session:
     logger.info(f"Пользователь {user.tg_id} завершил заказ {order_id}")
 
 
-# Проверка на неправильные сообщения
-@router.message(ClientStates.WAITING_BASKET_SCREENSHOT)
-@router.message(ClientStates.WAITING_BUY_SCREENSHOT)
-@router.message(ClientStates.WAITING_RECEIVED_SCREENSHOT)
-@router.message(ClientStates.WAITING_REVIEW_SCREENSHOT)
-async def wrong_content_type(message: Message):
-    """Обработка неправильного типа сообщения."""
-    await message.delete()
-    await message.answer(
-        "❌ Пожалуйста, отправьте <b>скриншот</b> (фотографию).",
-        parse_mode="HTML"
-    )
+# УДАЛЕНЫ wrong_content_type обработчики - они блокировали кнопку "Отменить прогресс"
+# Если пользователь отправит не фото, он просто не получит реакцию и сможет нажать кнопку отмены

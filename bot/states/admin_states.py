@@ -1,11 +1,10 @@
-"""Состояния для админ-панели."""
+"""Состояния администратора."""
 from aiogram.fsm.state import State, StatesGroup
 
 
 class AdminStates(StatesGroup):
-    """Состояния админа при редактировании товаров."""
-    # Редактирование товара
-    EDIT_PRODUCT_NAME = State()
-    EDIT_PRODUCT_URL = State()
-    EDIT_PRODUCT_CASHBACK = State()
-    EDIT_PRODUCT_INSTRUCTION = State()
+    """Состояния администратора."""
+    
+    # Модерация заказов
+    WAITING_PAYMENT_SCREENSHOT = State()  # Ожидание скрина перевода
+    WAITING_REJECTION_REASON = State()  # Ожидание причины отказа

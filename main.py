@@ -1,37 +1,46 @@
 """Главный файл запуска бота для выкупов товаров."""
 import asyncio
 import logging
-import os
 from pathlib import Path
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
+import uvicorn
 
 from bot.config import settings
 from bot.database.database import init_db
-from bot.handlers import client, admin, support, client_screenshots
+from bot.handlers import client_new, admin_new
 from bot.middlewares.db_middleware import DatabaseMiddleware
 from bot.middlewares.services_middleware import ServicesMiddleware
-from bot.services.analytics_service import AnalyticsService
 from bot.services.sheets_service import SheetsService
+from bot.api.webapp_api import app as fastapi_app
 
 
 logger = logging.getLogger(__name__)
 
 
-async def update_analytics_task(analytics_service: AnalyticsService):
-    """Фоновая задача для обновления аналитики каждые 5 минут."""
-    while True:
-        try:
-            await asyncio.sleep(settings.ANALYTICS_UPDATE_INTERVAL)
-            logger.info("Запуск обновления аналитики...")
-            await analytics_service.update_analytics_sheet()
-        except asyncio.CancelledError:
-            logger.info("Фоновая задача аналитики остановлена")
-            break
-        except Exception as e:
-            logger.error(f"Ошибка в фоновой задаче аналитики: {e}")
-            await asyncio.sleep(60)  # Подождать минуту перед повтором
+async def run_bot(bot: Bot, dp: Dispatcher):
+    """Запуск бота."""
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Бот запущен в режиме polling")
+        await dp.start_polling(bot)
+    except asyncio.CancelledError:
+        logger.info("Бот остановлен")
+    finally:
+        await bot.session.close()
+
+
+async def run_fastapi():
+    """Запуск FastAPI сервера."""
+    config = uvicorn.Config(
+        fastapi_app,
+        host="0.0.0.0",
+        port=8000,
+        log_level="info"
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
 
 
 async def main():
@@ -50,11 +59,19 @@ async def main():
         ]
     )
     
-    logger.info("Запуск бота...")
+    logger.info("🚀 Запуск бота v2.0...")
     
     # Инициализация базы данных
     await init_db()
-    logger.info("База данных инициализирована")
+    logger.info("✅ База данных инициализирована")
+    
+    # Инициализируем конфигурацию бота
+    try:
+        from bot.utils.init_bot_config import init_default_config
+        await init_default_config()
+        logger.info("✅ Конфигурация бота инициализирована")
+    except Exception as e:
+        logger.warning(f"⚠️ Конфиг уже существует или ошибка: {e}")
     
     # Инициализация Redis для FSM
     redis = Redis(
@@ -71,46 +88,31 @@ async def main():
     # Инициализация сервисов
     sheets_service = SheetsService()
     await sheets_service.initialize()
-    analytics_service = AnalyticsService(sheets_service)
     
     # Сохраняем сервисы в workflow_data для доступа из хэндлеров
     dp.workflow_data.update({
-        'sheets_service': sheets_service,
-        'analytics_service': analytics_service
+        'sheets_service': sheets_service
     })
     
-    logger.info("Сервисы инициализированы")
+    logger.info("✅ Сервисы инициализированы")
     
     # Подключение middleware
     dp.update.middleware(ServicesMiddleware())  # Первым добавляем services
     dp.update.middleware(DatabaseMiddleware())  # Потом database
     
-    # Регистрация роутеров
-    dp.include_router(admin.router)
-    dp.include_router(support.router)
-    dp.include_router(client_screenshots.router)
-    dp.include_router(client.router)
+    # Регистрация роутеров (НОВЫЕ ХЭНДЛЕРЫ)
+    dp.include_router(admin_new.router)
+    dp.include_router(client_new.router)
     
-    # Запуск фоновой задачи для аналитики
-    analytics_task = asyncio.create_task(update_analytics_task(analytics_service))
-    logger.info("Фоновая задача аналитики запущена")
+    logger.info("✅ Роутеры зарегистрированы")
     
     try:
-        # Удаляем вебхук на случай если он был установлен
-        await bot.delete_webhook(drop_pending_updates=True)
-        logger.info("Бот запущен в режиме polling")
-        
-        # Запуск бота
-        await dp.start_polling(bot)
+        # Запускаем бота и FastAPI параллельно
+        await asyncio.gather(
+            run_bot(bot, dp),
+            run_fastapi()
+        )
     finally:
-        # Остановка фоновой задачи
-        analytics_task.cancel()
-        try:
-            await analytics_task
-        except asyncio.CancelledError:
-            pass
-        
-        await bot.session.close()
         await redis.close()
         logger.info("Бот остановлен")
 

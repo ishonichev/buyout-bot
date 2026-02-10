@@ -6,41 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
 import logging
+import asyncio
 
 from bot.database.models import User, Order, OrderStatus, AnalyticsEvent, Product
-from bot.keyboards.client_keyboards import get_process_keyboard, get_main_menu
+from bot.keyboards.client_keyboards import get_main_menu
 from bot.states.client_states import ClientStates
 from bot.config import settings
 from bot.services.sheets_service import SheetsService
 
 logger = logging.getLogger(__name__)
 router = Router(name='client_screenshots')
-
-
-# ВАЖНО: Обработчик отмены должен быть ПЕРВЫМ, чтобы работать в любом состоянии
-@router.message(F.text == "❌ Отменить прогресс")
-async def cancel_progress(message: Message, state: FSMContext, session: AsyncSession, user: User):
-    """Отмена текущего заказа - работает в любом состоянии."""
-    data = await state.get_data()
-    order_id = data.get('order_id')
-    
-    if order_id:
-        # Отменяем заказ
-        result = await session.execute(select(Order).where(Order.id == order_id))
-        order = result.scalar_one_or_none()
-        if order:
-            order.status = OrderStatus.CANCELLED
-            await session.commit()
-    
-    await state.clear()
-    
-    await message.answer(
-        "❌ Заказ отменен.\n\n"
-        "Вы можете выбрать другой товар или обратиться к оператору.",
-        reply_markup=get_main_menu()
-    )
-    
-    logger.info(f"Пользователь {user.tg_id} отменил заказ {order_id}")
 
 
 @router.message(ClientStates.WAITING_BASKET_SCREENSHOT, F.photo)
@@ -54,7 +29,7 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
     screenshots['basket'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ
+    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -69,27 +44,24 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
     await session.commit()
     
     await message.answer(
-        "✅ <b>Скриншот корзины принят!</b>\n\n"
-        "📸 Теперь отправьте <b>скриншот покупки</b>",
-        reply_markup=get_process_keyboard(),
-        parse_mode="HTML"
+        "✅ Скриншот корзины принят!\n\n"
+        "📸 Теперь отправьте скриншот покупки"
     )
     await state.set_state(ClientStates.WAITING_BUY_SCREENSHOT)
 
 
 @router.message(ClientStates.WAITING_BUY_SCREENSHOT, F.photo)
-async def buy_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
+async def buy_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User):
     """Получен скриншот покупки."""
     data = await state.get_data()
     order_id = data.get('order_id')
-    cashback_amount = data.get('cashback_amount', 0)
     screenshots = data.get('screenshots', {})
     
     # Сохраняем file_id фото
     screenshots['buy'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ
+    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -98,42 +70,20 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
         order.status = OrderStatus.BUY_SENT
         await session.commit()
     
-    # Записываем в Google Sheets (Лист1)
-    if sheets_service:
-        username = message.from_user.username
-        if username:
-            username = f"@{username}"
-        else:
-            username = message.from_user.full_name
-            
-        try:
-            await sheets_service.add_order_to_sheet1({
-                'order_id': order_id,
-                'username': username,
-                'basket_date': order.basket_date,
-                'buy_date': order.buy_date,
-                'cashback_amount': cashback_amount
-            })
-            logger.info(f"Заказ {order_id} добавлен в Google Sheets")
-        except Exception as e:
-            logger.error(f"Ошибка записи в Google Sheets: {e}")
-    
     # Аналитика: Кнопка 5
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_5")
     session.add(event)
     await session.commit()
     
     await message.answer(
-        "✅ <b>Скриншот покупки принят!</b>\n\n"
-        "📸 Теперь отправьте <b>скриншот товара на руках</b>",
-        reply_markup=get_process_keyboard(),
-        parse_mode="HTML"
+        "✅ Скриншот покупки принят!\n\n"
+        "📸 Теперь отправьте скриншот товара на руках"
     )
     await state.set_state(ClientStates.WAITING_RECEIVED_SCREENSHOT)
 
 
 @router.message(ClientStates.WAITING_RECEIVED_SCREENSHOT, F.photo)
-async def received_screenshot(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
+async def received_screenshot(message: Message, state: FSMContext, session: AsyncSession, user: User):
     """Получен скриншот товара на руках."""
     data = await state.get_data()
     order_id = data.get('order_id')
@@ -143,7 +93,7 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     screenshots['received'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ
+    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -152,38 +102,26 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
         order.status = OrderStatus.RECEIVED
         await session.commit()
     
-    # Обновляем Google Sheets
-    if sheets_service and order:
-        try:
-            await sheets_service.update_order_in_sheet1(order_id, 'received_date', order.received_date)
-            logger.info(f"Обновлена дата получения для заказа {order_id}")
-        except Exception as e:
-            logger.error(f"Ошибка обновления Google Sheets: {e}")
-    
     # Аналитика: Кнопка 6
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_6")
     session.add(event)
     await session.commit()
     
     review_text = (
-        "👍 <b>Отлично!</b>\n\n"
-        "📝 <b>Добрый день!</b>\n\n"
-        "Отзыв <b>ЗАВТРА</b> на карточку:\n"
-        "⭐️ 5 звезд <b>БЕЗ ТЕКСТА И ФОТО</b>\n\n"
+        "👍 Отлично!\n\n"
+        "📝 Добрый день!\n\n"
+        "Отзыв ЗАВТРА на карточку:\n"
+        "⭐️ 5 звезд БЕЗ ТЕКСТА И ФОТО\n\n"
         "После подтверждения модерации пришлите, пожалуйста:\n"
         "📸 Скриншот опубликованного отзыва"
     )
     
-    await message.answer(
-        review_text,
-        reply_markup=get_process_keyboard(),
-        parse_mode="HTML"
-    )
+    await message.answer(review_text)
     await state.set_state(ClientStates.WAITING_REVIEW_SCREENSHOT)
 
 
 @router.message(ClientStates.WAITING_REVIEW_SCREENSHOT, F.photo)
-async def review_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
+async def review_screenshot_received(message: Message, state: FSMContext, session: AsyncSession, user: User):
     """Получен скриншот отзыва."""
     data = await state.get_data()
     order_id = data.get('order_id')
@@ -193,7 +131,7 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
     screenshots['review'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ
+    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -201,41 +139,32 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
         order.status = OrderStatus.REVIEW_MODERATION
         await session.commit()
     
-    # Обновляем Google Sheets
-    if sheets_service:
-        try:
-            await sheets_service.update_order_in_sheet1(order_id, 'review_date', datetime.now())
-            logger.info(f"Обновлена дата отзыва для заказа {order_id}")
-        except Exception as e:
-            logger.error(f"Ошибка обновления Google Sheets: {e}")
-    
     # Аналитика: Кнопка 7
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_7")
     session.add(event)
     await session.commit()
     
-    # Просим указать реквизиты
     await message.answer(
-        "✅ <b>Скриншот отзыва получен!</b>\n\n"
+        "✅ Скриншот отзыва получен!\n\n"
         "📝 Теперь укажите:\n"
         "• Ваше имя на WildBerries\n"
         "• Реквизиты для перевода кэшбэка\n\n"
-        "Например: <i>Иван Иванов, +79001234567</i>",
-        parse_mode="HTML"
+        "Например: Иван Иванов, +79001234567"
     )
     await state.set_state(ClientStates.WAITING_PAYMENT_DETAILS)
 
 
 @router.message(ClientStates.WAITING_PAYMENT_DETAILS, F.text)
-async def payment_details_received(message: Message, state: FSMContext, session: AsyncSession, user: User):
-    """Получены реквизиты - отправляем админу ВСЕ фото в одном сообщении."""
+async def payment_details_received(message: Message, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
+    """Получены реквизиты - ЗАВЕРШАЕМ ЗАКАЗ!"""
     data = await state.get_data()
     order_id = data.get('order_id')
     product_name = data.get('product_name', 'Неизвестно')
     cashback_amount = data.get('cashback_amount', 0)
+    username = data.get('username', 'Неизвестно')
     screenshots = data.get('screenshots', {})
     
-    # Обновляем заказ
+    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -243,20 +172,39 @@ async def payment_details_received(message: Message, state: FSMContext, session:
         order.payment_details = message.text
         await session.commit()
     
-    # Формируем сообщение для админа
+    # ЗАПИСЫВАЕМ В GOOGLE SHEETS ЛИСТ1 ТОЛЬКО СЕЙЧАС (ПОЛНУЮ СТРОКУ!)
+    if sheets_service and order:
+        try:
+            # Фоновая задача - не блокирует бота
+            asyncio.create_task(
+                sheets_service.add_order_to_sheet1({
+                    'order_id': order_id,
+                    'username': username,
+                    'basket_date': order.basket_date,
+                    'buy_date': order.buy_date,
+                    'received_date': order.received_date,
+                    'review_date': datetime.now(),
+                    'cashback_amount': cashback_amount
+                })
+            )
+            logger.info(f"[📊] Запись заказа {order_id} в Google Sheets запущена")
+        except Exception as e:
+            logger.error(f"[❌] Ошибка записи в Google Sheets: {e}")
+    
+    # Формируем сообщение для админа со ВСЕМИ фото
     admin_text = (
-        f"🔔 <b>Новый заказ на модерации!</b>\n\n"
-        f"👤 <b>Пользователь:</b> {message.from_user.full_name}\n"
+        f"🔔 Новый заказ на модерации!\n\n"
+        f"👤 Пользователь: {message.from_user.full_name}\n"
     )
     
     if message.from_user.username:
-        admin_text += f"🆔 <b>Username:</b> @{message.from_user.username}\n"
+        admin_text += f"🆔 Username: @{message.from_user.username}\n"
     
     admin_text += (
-        f"🆔 <b>ID:</b> {user.tg_id}\n\n"
-        f"📦 <b>Товар:</b> {product_name}\n"
-        f"💰 <b>Сумма кэшбэка:</b> {cashback_amount} ₽\n\n"
-        f"📝 <b>Реквизиты:</b>\n{message.text}"
+        f"🆔 ID: {user.tg_id}\n\n"
+        f"📦 Товар: {product_name}\n"
+        f"💰 Сумма кэшбэка: {cashback_amount} ₽\n\n"
+        f"📝 Реквизиты:\n{message.text}"
     )
     
     # Отправляем админам медиагруппу со всеми фото
@@ -265,60 +213,43 @@ async def payment_details_received(message: Message, state: FSMContext, session:
     if 'basket' in screenshots:
         media_group.append(InputMediaPhoto(
             media=screenshots['basket'],
-            caption=admin_text if len(media_group) == 0 else None,
-            parse_mode="HTML"
+            caption=admin_text if len(media_group) == 0 else None
         ))
     
     if 'buy' in screenshots:
         media_group.append(InputMediaPhoto(
             media=screenshots['buy'],
-            caption=admin_text if len(media_group) == 0 else None,
-            parse_mode="HTML"
+            caption=admin_text if len(media_group) == 0 else None
         ))
     
     if 'received' in screenshots:
         media_group.append(InputMediaPhoto(
             media=screenshots['received'],
-            caption=admin_text if len(media_group) == 0 else None,
-            parse_mode="HTML"
+            caption=admin_text if len(media_group) == 0 else None
         ))
     
     if 'review' in screenshots:
         media_group.append(InputMediaPhoto(
             media=screenshots['review'],
-            caption=admin_text if len(media_group) == 0 else None,
-            parse_mode="HTML"
+            caption=admin_text if len(media_group) == 0 else None
         ))
     
     # Отправляем всем админам
     for admin_id in settings.admin_ids:
         try:
             if media_group:
-                await message.bot.send_media_group(
-                    admin_id,
-                    media=media_group
-                )
+                await message.bot.send_media_group(admin_id, media=media_group)
             else:
-                # Если почему-то нет фото, отправляем только текст
-                await message.bot.send_message(
-                    admin_id,
-                    admin_text,
-                    parse_mode="HTML"
-                )
+                await message.bot.send_message(admin_id, admin_text)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
     
     await message.answer(
-        "✅ <b>Спасибо!</b>\n\n"
+        "✅ Спасибо!\n\n"
         "Ваш заказ отправлен на модерацию. "
         "Мы свяжемся с вами в ближайшее время! 🙏",
-        reply_markup=get_main_menu(),
-        parse_mode="HTML"
+        reply_markup=get_main_menu()
     )
     await state.clear()
     
     logger.info(f"Пользователь {user.tg_id} завершил заказ {order_id}")
-
-
-# УДАЛЕНЫ wrong_content_type обработчики - они блокировали кнопку "Отменить прогресс"
-# Если пользователь отправит не фото, он просто не получит реакцию и сможет нажать кнопку отмены

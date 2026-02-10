@@ -11,8 +11,7 @@ from bot.database.models import User, Product, Order, OrderStatus, AnalyticsEven
 from bot.keyboards.client_keyboards import (
     get_main_menu,
     get_products_keyboard,
-    get_agreement_keyboard,
-    get_process_keyboard
+    get_agreement_keyboard
 )
 from bot.states.client_states import ClientStates
 from bot.config import settings
@@ -34,7 +33,7 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
     await session.commit()
     
     welcome_text = (
-        "👋 <b>Привет!</b>\n\n"
+        "👋 Привет!\n\n"
         "Для вашего и нашего удобства и экономии времени мы создали бота "
         "для выкупов со 100% кэшбэком.\n\n"
         "Вы сможете в любое время зайти и проверить какие товары доступны для выкупа "
@@ -45,8 +44,7 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
     
     await message.answer(
         welcome_text,
-        reply_markup=get_main_menu(),
-        parse_mode="HTML"
+        reply_markup=get_main_menu()
     )
     logger.info(f"Пользователь {user.tg_id} запустил бота")
 
@@ -64,9 +62,8 @@ async def select_product(message: Message, session: AsyncSession, user: User):
     products = result.scalars().all()
     
     await message.answer(
-        "🛋️ <b>Выберите товар для выкупа:</b>",
-        reply_markup=get_products_keyboard(products),
-        parse_mode="HTML"
+        "🛋️ Выберите товар для выкупа:",
+        reply_markup=get_products_keyboard(products)
     )
 
 
@@ -75,21 +72,17 @@ async def ask_question(message: Message, user: User, session: AsyncSession):
     """Обработка вопросов пользователя."""
     # Уведомляем админов
     admin_text = (
-        f"👤 <b>Пользователь просит помощи!</b>\n\n"
-        f"🆔 <b>ID:</b> {user.tg_id}\n"
-        f"👤 <b>Имя:</b> {message.from_user.full_name}\n"
+        f"👤 Пользователь просит помощи!\n\n"
+        f"🆔 ID: {user.tg_id}\n"
+        f"👤 Имя: {message.from_user.full_name}\n"
     )
     
     if message.from_user.username:
-        admin_text += f"🆔 <b>Username:</b> @{message.from_user.username}\n"
+        admin_text += f"🆔 Username: @{message.from_user.username}\n"
     
     for admin_id in settings.admin_ids:
         try:
-            await message.bot.send_message(
-                admin_id,
-                admin_text,
-                parse_mode="HTML"
-            )
+            await message.bot.send_message(admin_id, admin_text)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
     
@@ -145,34 +138,34 @@ async def buy_product(callback: CallbackQuery, session: AsyncSession, user: User
         product_id=product.id,
         product_name=product.name,
         cashback_amount=product.cashback_amount,
+        username=message.from_user.username or message.from_user.full_name,
         screenshots={}
     )
     
     # Отправляем инструкцию
     instruction_text = (
-        f"📜 <b>Инструкция по выкупу \"{product.name}\"</b>\n\n"
+        f"📜 Инструкция по выкупу \"{product.name}\"\n\n"
         f"{product.instruction_text}\n\n"
-        f"💰 <b>Кэшбэк:</b> {product.cashback_amount} ₽"
+        f"💰 Кэшбэк: {product.cashback_amount} ₽"
     )
     
     await callback.message.delete()
     await callback.message.answer(
         instruction_text,
-        reply_markup=get_agreement_keyboard(),
-        parse_mode="HTML"
+        reply_markup=get_agreement_keyboard()
     )
     await callback.answer()
     
     logger.info(f"Пользователь {user.tg_id} начал выкуп товара {product.name}")
 
 
-@router.message(F.text == "✅ Я согласен")
-async def agree_instruction(message: Message, state: FSMContext, session: AsyncSession, user: User):
+@router.callback_query(F.data == "agree")
+async def agree_instruction(callback: CallbackQuery, state: FSMContext, session: AsyncSession, user: User):
     """Пользователь согласился с инструкцией."""
     data = await state.get_data()
     
     if not data.get('order_id'):
-        await message.answer("❌ Сначала выберите товар")
+        await callback.answer("❌ Сначала выберите товар", show_alert=True)
         return
     
     # Аналитика: Кнопка 3
@@ -182,9 +175,33 @@ async def agree_instruction(message: Message, state: FSMContext, session: AsyncS
     
     await state.set_state(ClientStates.WAITING_BASKET_SCREENSHOT)
     
-    await message.answer(
-        "✅ <b>Отлично!</b>\n\n"
-        "📸 Отправьте <b>скриншот товара в корзине</b>",
-        reply_markup=get_process_keyboard(),
-        parse_mode="HTML"
+    await callback.message.delete()
+    await callback.message.answer(
+        "✅ Отлично!\n\n"
+        "📸 Отправьте скриншот товара в корзине"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "ask_question")
+async def ask_question_callback(callback: CallbackQuery, user: User):
+    """Обработка вопросов через callback."""
+    admin_text = (
+        f"👤 Пользователь просит помощи!\n\n"
+        f"🆔 ID: {user.tg_id}\n"
+        f"👤 Имя: {callback.from_user.full_name}\n"
+    )
+    
+    if callback.from_user.username:
+        admin_text += f"🆔 Username: @{callback.from_user.username}\n"
+    
+    for admin_id in settings.admin_ids:
+        try:
+            await callback.bot.send_message(admin_id, admin_text)
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+    
+    await callback.answer(
+        "✅ Ваш запрос отправлен оператору",
+        show_alert=True
     )

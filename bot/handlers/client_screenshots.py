@@ -25,11 +25,9 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
     order_id = data.get('order_id')
     screenshots = data.get('screenshots', {})
     
-    # Сохраняем file_id фото
     screenshots['basket'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -43,9 +41,8 @@ async def basket_screenshot_received(message: Message, state: FSMContext, sessio
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("button_4"))
+        sheets_service.increment_analytics_event("button_4")
     
     await message.answer(
         "✅ Скриншот корзины принят!\n\n"
@@ -61,11 +58,9 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
     order_id = data.get('order_id')
     screenshots = data.get('screenshots', {})
     
-    # Сохраняем file_id фото
     screenshots['buy'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -79,9 +74,8 @@ async def buy_screenshot_received(message: Message, state: FSMContext, session: 
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("button_5"))
+        sheets_service.increment_analytics_event("button_5")
     
     await message.answer(
         "✅ Скриншот покупки принят!\n\n"
@@ -97,11 +91,9 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     order_id = data.get('order_id')
     screenshots = data.get('screenshots', {})
     
-    # Сохраняем file_id фото
     screenshots['received'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -115,9 +107,8 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("button_6"))
+        sheets_service.increment_analytics_event("button_6")
     
     review_text = (
         "👍 Отлично!\n\n"
@@ -139,11 +130,9 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
     order_id = data.get('order_id')
     screenshots = data.get('screenshots', {})
     
-    # Сохраняем file_id фото
     screenshots['review'] = message.photo[-1].file_id
     await state.update_data(screenshots=screenshots)
     
-    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -156,9 +145,8 @@ async def review_screenshot_received(message: Message, state: FSMContext, sessio
     session.add(event)
     await session.commit()
     
-    # Обновляем Лис2 в фоне
     if sheets_service:
-        asyncio.create_task(sheets_service.increment_analytics_event("button_7"))
+        sheets_service.increment_analytics_event("button_7")
     
     await message.answer(
         "✅ Скриншот отзыва получен!\n\n"
@@ -180,7 +168,6 @@ async def payment_details_received(message: Message, state: FSMContext, session:
     username = data.get('username', 'Неизвестно')
     screenshots = data.get('screenshots', {})
     
-    # Обновляем заказ в БД
     result = await session.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     
@@ -191,7 +178,6 @@ async def payment_details_received(message: Message, state: FSMContext, session:
     # ЗАПИСЫВАЕМ В GOOGLE SHEETS ЛИС1 ТОЛЬКО СЕЙЧАС (ПОЛНУЮ СТРОКУ!)
     if sheets_service and order:
         try:
-            # Фоновая задача - не блокирует бота
             asyncio.create_task(
                 sheets_service.add_order_to_sheet1({
                     'order_id': order_id,
@@ -203,9 +189,9 @@ async def payment_details_received(message: Message, state: FSMContext, session:
                     'cashback_amount': cashback_amount
                 })
             )
-            logger.info(f"[📊] Запись заказа {order_id} в Google Sheets запущена")
+            logger.info(f"📊 Запись заказа {order_id} в Google Sheets запущена")
         except Exception as e:
-            logger.error(f"[❌] Ошибка записи в Google Sheets: {e}")
+            logger.error(f"❌ Ошибка записи в Google Sheets: {e}")
     
     # Формируем сообщение для админа со ВСЕМИ фото
     admin_text = (
@@ -223,7 +209,6 @@ async def payment_details_received(message: Message, state: FSMContext, session:
         f"📝 Реквизиты:\n{message.text}"
     )
     
-    # Отправляем админам медиагруппу со всеми фото
     media_group = []
     
     if 'basket' in screenshots:
@@ -250,7 +235,6 @@ async def payment_details_received(message: Message, state: FSMContext, session:
             caption=admin_text if len(media_group) == 0 else None
         ))
     
-    # Отправляем всем админам
     for admin_id in settings.admin_ids:
         try:
             if media_group:

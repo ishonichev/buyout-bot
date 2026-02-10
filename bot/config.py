@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     
     # Telegram Bot
     BOT_TOKEN: str
-    ADMIN_BOT_TOKEN: str = ""  # Токен для отдельного админ-бота (опционально)
     ADMIN_IDS: str  # Список ID через запятую, например: "123456789,987654321"
     
     # Database
@@ -26,8 +25,8 @@ class Settings(BaseSettings):
     # Google Sheets
     GOOGLE_SHEETS_CREDENTIALS_FILE: str = "credentials.json"
     GOOGLE_SPREADSHEET_ID: str
-    SHEET1_NAME: str = "Лист1"
-    SHEET2_NAME: str = "Лист2"
+    SHEET1_NAME: str = "Лис1"
+    SHEET2_NAME: str = "Лис2"
     
     # Analytics
     ANALYTICS_UPDATE_INTERVAL: int = 300  # Обновление аналитики каждые 5 минут (300 секунд)

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     
     # Telegram Bot
     BOT_TOKEN: str
+    ADMIN_BOT_TOKEN: str = ""  # Токен для отдельного админ-бота (опционально)
     ADMIN_IDS: str  # Список ID через запятую, например: "123456789,987654321"
     
     # Database
@@ -25,8 +26,8 @@ class Settings(BaseSettings):
     # Google Sheets
     GOOGLE_SHEETS_CREDENTIALS_FILE: str = "credentials.json"
     GOOGLE_SPREADSHEET_ID: str
-    SHEET1_NAME: str = "Лист 1"
-    SHEET2_NAME: str = "Лист 2"
+    SHEET1_NAME: str = "Лист1"
+    SHEET2_NAME: str = "Лист2"
     
     # Analytics
     ANALYTICS_UPDATE_INTERVAL: int = 300  # Обновление аналитики каждые 5 минут (300 секунд)
@@ -50,14 +51,19 @@ class Settings(BaseSettings):
         )
     
     @property
-    def admin_ids_list(self) -> List[int]:
+    def admin_ids(self) -> List[int]:
         """Получить список ID администраторов."""
         return [int(id.strip()) for id in self.ADMIN_IDS.split(",") if id.strip()]
     
     @property
+    def admin_ids_list(self) -> List[int]:
+        """Алиас для совместимости."""
+        return self.admin_ids
+    
+    @property
     def moderator_ids(self) -> List[int]:
         """Список ID модераторов (включает всех админов)."""
-        return self.admin_ids_list
+        return self.admin_ids
 
 
 settings = Settings()

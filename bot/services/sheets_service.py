@@ -18,7 +18,6 @@ class SheetsService:
         self.spreadsheet = None
         self.sheet1 = None  # Лист "Заявки"
         self.sheet2 = None  # Лист "Аналитика"
-        self._order_rows = {}  # Кэш order_id -> row_number
         
     def get_creds(self):
         """Получение credentials для Google API."""
@@ -40,7 +39,6 @@ class SheetsService:
             # Получаем или создаем листы
             await self._ensure_sheets_exist()
             await self._ensure_headers_exist()
-            await self._build_order_cache()
             
             logger.info("Подключение к Google Sheets установлено")
         except Exception as e:
@@ -108,115 +106,80 @@ class SheetsService:
             await self.sheet2.update('B3:J3', [["100%"] + ["0%"] * 8])
             logger.info("Заголовки Листа 2 созданы")
     
-    async def _build_order_cache(self):
-        """Построить кэш order_id -> номер строки."""
-        try:
-            all_values = await self.sheet1.get_all_values()
-            for i, row in enumerate(all_values[1:], start=2):  # Пропускаем заголовок
-                if len(row) > 0 and row[0].isdigit():
-                    order_id = int(row[0])
-                    self._order_rows[order_id] = i
-            logger.info(f"Кэш заказов построен: {len(self._order_rows)} записей")
-        except Exception as e:
-            logger.error(f"Ошибка построения кэша: {e}")
-    
     async def add_order_to_sheet1(self, order_data: Dict[str, Any]):
-        """Добавление заявки в Лист 1."""
+        """Добавление ПОЛНОЙ заявки в Лист 1 (только в конце!)."""
         try:
             order_id = order_data.get('order_id')
             username = order_data.get('username', 'Неизвестно')
             basket_date = self._format_date(order_data.get('basket_date'))
             buy_date = self._format_date(order_data.get('buy_date'))
+            received_date = self._format_date(order_data.get('received_date'))  # ТЕПЕРЬ ИСПОЛЬЗУЕМ!
+            review_date = self._format_date(order_data.get('review_date'))      # ТЕПЕРЬ ИСПОЛЬЗУЕМ!
             cashback = order_data.get('cashback_amount', 0)
             
-            logger.info(f"[Sheets] Добавляю заказ #{order_id}: username={username}, basket={basket_date}, buy={buy_date}, cashback={cashback}")
+            logger.info(f"[📊 Sheets] Записываю ПОЛНЫЙ заказ #{order_id}")
             
+            # ПОЛНАЯ строка со всеми данными
             row_data = [
                 order_id,
                 username,
                 basket_date,
                 buy_date,
-                "",  # Выкуп (обновится позже)
-                "",  # Отзыв (обновится позже)
+                received_date,  # Выкуп
+                review_date,    # Отзыв
                 cashback
             ]
             
             await self.sheet1.append_row(row_data)
-            
-            # Обновляем кэш
-            all_values = await self.sheet1.get_all_values()
-            row_num = len(all_values)  # Последняя строка
-            self._order_rows[order_id] = row_num
-            
-            logger.info(f"[Sheets] Заказ #{order_id} успешно добавлен в строку {row_num}")
+            logger.info(f"[✅ Sheets] Заказ #{order_id} успешно записан: {username}")
             
         except Exception as e:
-            logger.error(f"[Sheets] Ошибка добавления заявки: {e}", exc_info=True)
+            logger.error(f"[❌ Sheets] Ошибка записи заказа: {e}", exc_info=True)
     
-    async def update_order_in_sheet1(self, order_id: int, field: str, value: Any):
-        """Обновление существующей заявки в Листе 1 по order_id."""
+    async def increment_analytics_event(self, event_type: str):
+        """ИНКРЕМЕНТАЛЬНОЕ обновление аналитики (+1 к событию)."""
         try:
-            # Получаем номер строки из кэша
-            row_index = self._order_rows.get(order_id)
-            
-            if not row_index:
-                # Перестроить кэш и попробовать снова
-                await self._build_order_cache()
-                row_index = self._order_rows.get(order_id)
-                
-                if not row_index:
-                    logger.warning(f"[Sheets] Заказ #{order_id} не найден в таблице")
-                    return
-            
-            # Определяем колонку
-            field_map = {
-                'received_date': 'E',  # Выкуп
-                'review_date': 'F',    # Отзыв
+            event_mapping = {
+                'bot_visited': 'B',
+                'bot_started': 'C',
+                'button_1': 'D',
+                'button_2': 'E',
+                'button_3': 'F',
+                'button_4': 'G',
+                'button_5': 'H',
+                'button_6': 'I',
+                'button_7': 'J',
             }
             
-            if field not in field_map:
-                logger.warning(f"[Sheets] Неизвестное поле: {field}")
+            if event_type not in event_mapping:
                 return
             
-            col = field_map[field]
-            formatted_value = self._format_date(value) if isinstance(value, datetime) else value
+            col = event_mapping[event_type]
             
-            logger.info(f"[Sheets] Обновляю заказ #{order_id}: {field}={formatted_value} в ячейке {col}{row_index}")
+            # Читаем текущее значение
+            current_value = await self.sheet2.acell(f'{col}2')
+            count = int(current_value.value) if current_value.value else 0
             
-            await self.sheet1.update(f'{col}{row_index}', [[formatted_value]])
-            logger.info(f"[Sheets] Успешно обновлено {col}{row_index}")
-                
+            # Увеличиваем на 1
+            await self.sheet2.update(f'{col}2', [[count + 1]])
+            
+            # Пересчитываем проценты
+            await self._recalculate_percentages()
+            
+            logger.info(f"[📊 Sheets] {event_type}: {count} -> {count + 1}")
+            
         except Exception as e:
-            logger.error(f"[Sheets] Ошибка обновления заявки: {e}", exc_info=True)
+            logger.error(f"[❌ Sheets] Ошибка инкремента аналитики: {e}")
     
-    async def update_analytics_sheet2(self, analytics_data: Dict[str, int]):
-        """Обновление аналитики в Листе 2."""
+    async def _recalculate_percentages(self):
+        """Пересчитать проценты для Листт2."""
         try:
-            # analytics_data содержит количество для каждого события
-            # Формат: {'bot_visited': 100, 'bot_started': 80, ...}
-            
-            event_mapping = {
-                'bot_visited': 'B',      # Зашли в бот
-                'bot_started': 'C',      # Запустили бот
-                'button_1': 'D',         # Нажали кнопку 1
-                'button_2': 'E',         # Нажали кнопку 2
-                'button_3': 'F',         # Нажали кнопку 3
-                'button_4': 'G',         # Нажали кнопку 4
-                'button_5': 'H',         # Нажали кнопку 5
-                'button_6': 'I',         # Нажали кнопку 6
-                'button_7': 'J',         # Нажали кнопку 7
-            }
-            
-            # Обновляем количество (строка 2)
-            for event, col in event_mapping.items():
-                count = analytics_data.get(event, 0)
-                await self.sheet2.update(f'{col}2', [[count]])
-            
-            # Вычисляем и обновляем проценты (строка 3)
-            counts = [analytics_data.get(event, 0) for event in event_mapping.keys()]
+            # Читаем все значения
+            row2 = await self.sheet2.row_values(2)
+            counts = [int(v) if v else 0 for v in row2[1:10]]  # B2:J2
             
             percentages = []
-            prev_count = counts[0] if counts[0] > 0 else 1  # Зашли в бот
+            prev_count = counts[0] if counts[0] > 0 else 1
             
             for i, count in enumerate(counts):
                 if i == 0:
@@ -229,10 +192,9 @@ class SheetsService:
                 prev_count = count
             
             await self.sheet2.update('B3:J3', [percentages])
-            logger.info(f"[Sheets] Аналитика обновлена: {counts}")
             
         except Exception as e:
-            logger.error(f"[Sheets] Ошибка обновления аналитики: {e}", exc_info=True)
+            logger.error(f"[❌ Sheets] Ошибка пересчета процентов: {e}")
     
     def _format_date(self, date_value) -> str:
         """Форматирование даты в строку."""

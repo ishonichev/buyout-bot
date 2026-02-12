@@ -14,4 +14,5 @@ class ClientStates(StatesGroup):
 
 class SupportStates(StatesGroup):
     """Состояния для работы с поддержкой."""
-    CHATTING_WITH_USER = State()
+    USER_IN_DIALOG = State()  # Пользователь в диалоге с админом
+    ADMIN_IN_DIALOG = State()  # Админ в диалоге с пользователем

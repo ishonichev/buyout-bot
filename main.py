@@ -9,7 +9,7 @@ import uvicorn
 
 from bot.config import settings
 from bot.database.database import init_db
-from bot.handlers import client_new, admin_new
+from bot.handlers import client_new, admin_new, support
 from bot.middlewares.db_middleware import DatabaseMiddleware
 from bot.middlewares.services_middleware import ServicesMiddleware
 from bot.services.sheets_service import SheetsService
@@ -102,6 +102,7 @@ async def main():
     
     # Регистрация роутеров (НОВЫЕ ХЭНДЛЕРЫ)
     dp.include_router(admin_new.router)
+    dp.include_router(support.router)  # Система поддержки
     dp.include_router(client_new.router)
     
     logger.info("✅ Роутеры зарегистрированы")

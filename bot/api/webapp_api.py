@@ -4,12 +4,13 @@ import hmac
 from urllib.parse import parse_qsl
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Optional
 import logging
+import json
 
 from bot.database.database import async_session_maker
 from bot.database.models import Product, BotConfig
@@ -82,7 +83,6 @@ async def verify_admin(authorization: Optional[str] = Header(None)) -> int:
     init_data = validate_telegram_init_data(authorization)
     
     # Извлекаем user_id
-    import json
     user_data = json.loads(init_data.get('user', '{}'))
     user_id = user_data.get('id')
     
@@ -117,7 +117,7 @@ async def get_products(
     result = await session.execute(select(Product).order_by(Product.id))
     products = result.scalars().all()
     
-    return [
+    data = [
         {
             "id": p.id,
             "name": p.name,
@@ -126,6 +126,12 @@ async def get_products(
         }
         for p in products
     ]
+    
+    # Возвращаем JSON с явной кодировкой UTF-8
+    return JSONResponse(
+        content=data,
+        media_type="application/json; charset=utf-8"
+    )
 
 
 @app.post("/api/products/{product_id}")
@@ -136,6 +142,8 @@ async def update_product(
     session: AsyncSession = Depends(get_db)
 ):
     """Обновить товар."""
+    logger.info(f"Получены данные: name={data.name}, instruction={data.instruction_text}")
+    
     result = await session.execute(
         select(Product).where(Product.id == product_id)
     )
@@ -155,7 +163,14 @@ async def update_product(
         product.instruction_text = data.instruction_text
     
     await session.commit()
-    return {"status": "ok"}
+    await session.refresh(product)
+    
+    logger.info(f"Сохранено в БД: name={product.name}")
+    
+    return JSONResponse(
+        content={"status": "ok"},
+        media_type="application/json; charset=utf-8"
+    )
 
 
 @app.post("/api/products/{product_id}/toggle")
@@ -175,7 +190,10 @@ async def toggle_product(
         product.is_active = data.is_active
         await session.commit()
     
-    return {"status": "ok"}
+    return JSONResponse(
+        content={"status": "ok"},
+        media_type="application/json; charset=utf-8"
+    )
 
 
 @app.get("/api/config")
@@ -187,13 +205,18 @@ async def get_config(
     result = await session.execute(select(BotConfig))
     configs = result.scalars().all()
     
-    return {
+    data = {
         config.config_key: {
             "value": config.config_value,
             "description": config.description
         }
         for config in configs
     }
+    
+    return JSONResponse(
+        content=data,
+        media_type="application/json; charset=utf-8"
+    )
 
 
 @app.post("/api/config/{config_key}")
@@ -212,6 +235,9 @@ async def update_config(
     if config:
         config.config_value = data.value
         await session.commit()
-        return {"status": "ok"}
+        return JSONResponse(
+            content={"status": "ok"},
+            media_type="application/json; charset=utf-8"
+        )
     else:
         raise HTTPException(status_code=404, detail="Config not found")

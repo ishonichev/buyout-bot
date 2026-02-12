@@ -53,6 +53,8 @@ async def admin_respond(callback: CallbackQuery, state: FSMContext, session: Asy
     user_id = int(callback.data.split(":")[1])
     admin_id = callback.from_user.id
     
+    logger.info(f"[SUPPORT] Админ {admin_id} откликается на пользователя {user_id}")
+    
     # Проверяем через Redis, не занят ли уже этот пользователь
     user_state = await get_user_state(callback.bot, state.storage, user_id)
     user_data = await user_state.get_data()
@@ -60,6 +62,7 @@ async def admin_respond(callback: CallbackQuery, state: FSMContext, session: Asy
     if user_data.get('support_admin_id'):
         existing_admin = user_data['support_admin_id']
         if existing_admin != admin_id:
+            logger.warning(f"[SUPPORT] Пользователь {user_id} уже занят админом {existing_admin}")
             await callback.answer(
                 f"❌ На этого пользователя уже откликнулся другой админ!",
                 show_alert=True
@@ -69,6 +72,8 @@ async def admin_respond(callback: CallbackQuery, state: FSMContext, session: Asy
     # Устанавливаем состояние для админа
     await state.update_data(support_user_id=user_id)
     await state.set_state(SupportStates.ADMIN_IN_DIALOG)
+    
+    logger.info(f"[SUPPORT] Состояние админа {admin_id} установлено: support_user_id={user_id}")
     
     # Уведомляем админа
     await callback.message.edit_text(
@@ -94,19 +99,23 @@ async def admin_respond(callback: CallbackQuery, state: FSMContext, session: Asy
         await user_state.set_state(SupportStates.USER_IN_DIALOG)
         await user_state.update_data(support_admin_id=admin_id)
         
+        logger.info(f"[SUPPORT] Состояние пользователя {user_id} установлено: support_admin_id={admin_id}")
+        
     except Exception as e:
-        logger.error(f"Ошибка уведомления пользователя: {e}")
+        logger.error(f"[SUPPORT] Ошибка уведомления пользователя {user_id}: {e}")
         await callback.answer("❌ Ошибка связи с пользователем", show_alert=True)
         await state.clear()
         return
     
     await callback.answer("✅ Диалог начат")
-    logger.info(f"Админ {admin_id} откликнулся на пользователя {user_id}")
+    logger.info(f"[SUPPORT] Диалог начат: админ {admin_id} <-> пользователь {user_id}")
 
 
 @router.callback_query(F.data.startswith("support_ignore:"))
 async def admin_ignore(callback: CallbackQuery):
     """Админ игнорирует запрос."""
+    user_id = callback.data.split(":")[1]
+    logger.info(f"[SUPPORT] Админ {callback.from_user.id} игнорирует пользователя {user_id}")
     await callback.message.delete()
     await callback.answer("❌ Игнорировано")
 
@@ -119,6 +128,8 @@ async def user_end_dialog(message: Message, state: FSMContext, session: AsyncSes
     data = await state.get_data()
     admin_id = data.get('support_admin_id')
     user_id = message.from_user.id
+    
+    logger.info(f"[SUPPORT] Пользователь {user_id} завершает диалог с админом {admin_id}")
     
     if not admin_id:
         await message.answer("❌ У вас нет активного диалога.")
@@ -137,7 +148,7 @@ async def user_end_dialog(message: Message, state: FSMContext, session: AsyncSes
             f"🔚 Пользователь (ID: {user_id}) завершил диалог."
         )
     except Exception as e:
-        logger.error(f"Ошибка уведомления админа: {e}")
+        logger.error(f"[SUPPORT] Ошибка уведомления админа {admin_id}: {e}")
     
     # Проверяем, есть ли активный заказ
     user_has_order = await has_active_order(session, user_id)
@@ -146,7 +157,7 @@ async def user_end_dialog(message: Message, state: FSMContext, session: AsyncSes
         "✅ Диалог завершен. Спасибо за обращение!",
         reply_markup=get_main_menu_with_cancel() if user_has_order else get_main_menu()
     )
-    logger.info(f"Пользователь {user_id} завершил диалог с админом {admin_id}")
+    logger.info(f"[SUPPORT] Диалог завершен пользователем {user_id}")
 
 
 @router.message(F.text.startswith('/end_support'), SupportStates.ADMIN_IN_DIALOG)
@@ -155,6 +166,8 @@ async def end_support_command(message: Message, state: FSMContext):
     data = await state.get_data()
     user_id = data.get('support_user_id')
     admin_id = message.from_user.id
+    
+    logger.info(f"[SUPPORT] Админ {admin_id} завершает диалог с пользователем {user_id}")
     
     if not user_id:
         await message.answer("❌ У вас нет активного диалога.")
@@ -174,10 +187,10 @@ async def end_support_command(message: Message, state: FSMContext):
             reply_markup=get_main_menu()
         )
     except Exception as e:
-        logger.error(f"Ошибка уведомления пользователя: {e}")
+        logger.error(f"[SUPPORT] Ошибка уведомления пользователя {user_id}: {e}")
     
     await message.answer("✅ Диалог завершен.")
-    logger.info(f"Админ {admin_id} завершил диалог с пользователем {user_id}")
+    logger.info(f"[SUPPORT] Диалог завершен админом {admin_id}")
 
 
 # ========== ПЕРЕСЫЛКА СООБЩЕНИЙ (ПОСЛЕ ОБРАБОТЧИКА ЗАВЕРШЕНИЯ!) ==========
@@ -188,7 +201,10 @@ async def user_message_in_dialog(message: Message, state: FSMContext):
     data = await state.get_data()
     admin_id = data.get('support_admin_id')
     
+    logger.info(f"[SUPPORT] Сообщение от пользователя {message.from_user.id} -> админ {admin_id}")
+    
     if not admin_id:
+        logger.warning(f"[SUPPORT] Пользователь {message.from_user.id}: admin_id не найден в state")
         await message.answer("❌ Диалог не найден. Используйте кнопку Поддержка.")
         return
     
@@ -198,6 +214,7 @@ async def user_message_in_dialog(message: Message, state: FSMContext):
         
         if message.text:
             await message.bot.send_message(admin_id, prefix + message.text)
+            logger.info(f"[SUPPORT] Текст отправлен админу {admin_id}")
         elif message.photo:
             await message.bot.send_photo(
                 admin_id,
@@ -229,7 +246,7 @@ async def user_message_in_dialog(message: Message, state: FSMContext):
             await message.bot.send_message(admin_id, prefix + "[Неподдерживаемый тип сообщения]")
             
     except Exception as e:
-        logger.error(f"Ошибка пересылки админу: {e}")
+        logger.error(f"[SUPPORT] Ошибка пересылки админу {admin_id}: {e}")
         await message.answer("❌ Ошибка отправки сообщения.")
 
 
@@ -238,9 +255,14 @@ async def admin_message_in_dialog(message: Message, state: FSMContext):
     """Пересылка сообщений от админа к пользователю."""
     data = await state.get_data()
     user_id = data.get('support_user_id')
+    admin_id = message.from_user.id
+    
+    logger.info(f"[SUPPORT] Сообщение от админа {admin_id} -> пользователь {user_id}")
+    logger.info(f"[SUPPORT] Data админа: {data}")
     
     if not user_id:
-        await message.answer("❌ Диалог не найден.")
+        logger.warning(f"[SUPPORT] Админ {admin_id}: user_id не найден в state!")
+        await message.answer("❌ Диалог не найден. Используйте /end_support и начните заново.")
         return
     
     try:
@@ -249,6 +271,7 @@ async def admin_message_in_dialog(message: Message, state: FSMContext):
         
         if message.text:
             await message.bot.send_message(user_id, prefix + message.text)
+            logger.info(f"[SUPPORT] Текст отправлен пользователю {user_id}")
         elif message.photo:
             await message.bot.send_photo(
                 user_id,
@@ -276,8 +299,9 @@ async def admin_message_in_dialog(message: Message, state: FSMContext):
         elif message.sticker:
             await message.bot.send_sticker(user_id, message.sticker.file_id)
         else:
+            logger.warning(f"[SUPPORT] Неподдерживаемый тип сообщения от админа {admin_id}")
             await message.answer("❌ Неподдерживаемый тип сообщения.")
             
     except Exception as e:
-        logger.error(f"Ошибка пересылки пользователю: {e}")
+        logger.error(f"[SUPPORT] Ошибка пересылки пользователю {user_id}: {e}", exc_info=True)
         await message.answer("❌ Ошибка отправки сообщения.")

@@ -8,3 +8,6 @@ class AdminStates(StatesGroup):
     # Модерация заказов
     WAITING_PAYMENT_SCREENSHOT = State()  # Ожидание скрина перевода
     WAITING_REJECTION_REASON = State()  # Ожидание причины отказа
+    
+    # Поддержка
+    CHATTING_WITH_USER = State()  # Диалог с пользователем

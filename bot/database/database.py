@@ -6,13 +6,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Создаем асинхронный движок
+# Создаем асинхронный движок с принудительной кодировкой UTF-8
 engine = create_async_engine(
     settings.database_url,
     echo=settings.DEBUG,
     pool_pre_ping=True,
     pool_size=10,
-    max_overflow=20
+    max_overflow=20,
+    connect_args={
+        "server_settings": {
+            "client_encoding": "UTF8"
+        }
+    }
 )
 
 # Создаем фабрику сессий
@@ -54,8 +59,6 @@ async def init_db():
                 product = Product(
                     id=i,
                     name=f"Товар {i}",
-                    url="",
-                    cashback_amount=0,
                     is_active=False,
                     instruction_text="Инструкция не установлена"
                 )

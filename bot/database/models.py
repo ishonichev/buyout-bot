@@ -12,9 +12,11 @@ class OrderStatus(enum.Enum):
     BASKET_SENT = "basket_sent"  # Отправлен скриншот корзины
     BUY_SENT = "buy_sent"  # Отправлен скриншот покупки
     RECEIVED = "received"  # Товар на руках
-    REVIEW_MODERATION = "review_moderation"  # Отзыв на модерации
+    REVIEW_SENT = "review_sent"  # Отзыв отправлен
+    PENDING_APPROVAL = "pending_approval"  # Ожидает подтверждения
+    ADMIN_PAYMENT_SENT = "admin_payment_sent"  # Админ отправил скрин перевода
     COMPLETED = "completed"  # Завершено
-    CANCELLED = "cancelled"  # Отменен
+    REJECTED = "rejected"  # Отклонен
 
 
 class User(Base):
@@ -30,16 +32,25 @@ class User(Base):
 
 
 class Product(Base):
-    """Модель товара."""
+    """Модель товара (упрощенная)."""
     __tablename__ = "products"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1-4
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1-4 (фиксированные слоты)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    url: Mapped[str] = mapped_column(Text, nullable=False)
-    cashback_amount: Mapped[int] = mapped_column(Integer, default=0)
+    instruction_text: Mapped[str] = mapped_column(Text, nullable=False)  # ВСЁ в одной инструкции
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-    instruction_text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BotConfig(Base):
+    """Конфигурация бота (все настраиваемые тексты)."""
+    __tablename__ = "bot_config"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    config_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    config_value: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=True)  # Подсказка для админа
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -60,7 +71,9 @@ class Order(Base):
     
     # Реквизиты для кэшбэка
     payment_details: Mapped[str] = mapped_column(Text, nullable=True)
-    wb_username: Mapped[str] = mapped_column(String(255), nullable=True)
+    
+    # Причина отклонения (если админ отклонил)
+    rejection_reason: Mapped[str] = mapped_column(Text, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

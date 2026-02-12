@@ -1,9 +1,9 @@
 """Обработчики для системы поддержки (диалоги пользователь-админ)."""
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
 import logging
-from typing import Dict
 
 from bot.config import settings
 from bot.states.client_states import SupportStates
@@ -14,10 +14,6 @@ from bot.database.models import Order, OrderStatus
 
 logger = logging.getLogger(__name__)
 router = Router(name='support')
-
-# Хранилище активных диалогов (в продакшене лучше использовать Redis)
-# Формат: {user_id: admin_id}
-active_dialogs: Dict[int, int] = {}
 
 
 async def has_active_order(session: AsyncSession, user_id: int) -> bool:
@@ -37,6 +33,18 @@ async def has_active_order(session: AsyncSession, user_id: int) -> bool:
     return result.scalar_one_or_none() is not None
 
 
+async def get_user_state(bot: Bot, storage, user_id: int) -> FSMContext:
+    """Получить FSMContext для другого пользователя."""
+    return FSMContext(
+        storage=storage,
+        key=StorageKey(
+            bot_id=bot.id,
+            chat_id=user_id,
+            user_id=user_id
+        )
+    )
+
+
 # ========== ОБРАБОТЧИКИ CALLBACK ДЛЯ АДМИНОВ ==========
 
 @router.callback_query(F.data.startswith("support_respond:"))
@@ -45,18 +53,18 @@ async def admin_respond(callback: CallbackQuery, state: FSMContext, session: Asy
     user_id = int(callback.data.split(":")[1])
     admin_id = callback.from_user.id
     
-    # Проверяем, не занят ли уже этот пользователь
-    if user_id in active_dialogs:
-        existing_admin = active_dialogs[user_id]
+    # Проверяем через Redis, не занят ли уже этот пользователь
+    user_state = await get_user_state(callback.bot, state.storage, user_id)
+    user_data = await user_state.get_data()
+    
+    if user_data.get('support_admin_id'):
+        existing_admin = user_data['support_admin_id']
         if existing_admin != admin_id:
             await callback.answer(
                 f"❌ На этого пользователя уже откликнулся другой админ!",
                 show_alert=True
             )
             return
-    
-    # Создаем диалог
-    active_dialogs[user_id] = admin_id
     
     # Устанавливаем состояние для админа
     await state.update_data(support_user_id=user_id)
@@ -82,23 +90,14 @@ async def admin_respond(callback: CallbackQuery, state: FSMContext, session: Asy
             reply_markup=get_support_menu()
         )
         
-        # Устанавливаем состояние для пользователя (через его FSM storage)
-        user_state = FSMContext(
-            bot=callback.bot,
-            storage=state.storage,
-            key=state.key.__class__(
-                bot_id=state.key.bot_id,
-                chat_id=user_id,
-                user_id=user_id
-            )
-        )
+        # Устанавливаем состояние для пользователя
         await user_state.set_state(SupportStates.USER_IN_DIALOG)
         await user_state.update_data(support_admin_id=admin_id)
         
     except Exception as e:
         logger.error(f"Ошибка уведомления пользователя: {e}")
         await callback.answer("❌ Ошибка связи с пользователем", show_alert=True)
-        del active_dialogs[user_id]
+        await state.clear()
         return
     
     await callback.answer("✅ Диалог начат")
@@ -112,7 +111,76 @@ async def admin_ignore(callback: CallbackQuery):
     await callback.answer("❌ Игнорировано")
 
 
-# ========== ПЕРЕСЫЛКА СООБЩЕНИЙ ==========
+# ========== ЗАВЕРШЕНИЕ ДИАЛОГА (ДОЛЖНО БЫТЬ ДО ПЕРЕСЫЛКИ СООБЩЕНИЙ!) ==========
+
+@router.message(F.text.contains("Завершить диалог"), SupportStates.USER_IN_DIALOG)
+async def user_end_dialog(message: Message, state: FSMContext, session: AsyncSession):
+    """Пользователь завершает диалог."""
+    data = await state.get_data()
+    admin_id = data.get('support_admin_id')
+    user_id = message.from_user.id
+    
+    if not admin_id:
+        await message.answer("❌ У вас нет активного диалога.")
+        return
+    
+    # Очищаем состояния
+    await state.clear()
+    
+    # Уведомляем админа
+    try:
+        admin_state = await get_user_state(message.bot, state.storage, admin_id)
+        await admin_state.clear()
+        
+        await message.bot.send_message(
+            admin_id,
+            f"🔚 Пользователь (ID: {user_id}) завершил диалог."
+        )
+    except Exception as e:
+        logger.error(f"Ошибка уведомления админа: {e}")
+    
+    # Проверяем, есть ли активный заказ
+    user_has_order = await has_active_order(session, user_id)
+    
+    await message.answer(
+        "✅ Диалог завершен. Спасибо за обращение!",
+        reply_markup=get_main_menu_with_cancel() if user_has_order else get_main_menu()
+    )
+    logger.info(f"Пользователь {user_id} завершил диалог с админом {admin_id}")
+
+
+@router.message(F.text.startswith('/end_support'), SupportStates.ADMIN_IN_DIALOG)
+async def end_support_command(message: Message, state: FSMContext):
+    """Админ завершает диалог через команду."""
+    data = await state.get_data()
+    user_id = data.get('support_user_id')
+    admin_id = message.from_user.id
+    
+    if not user_id:
+        await message.answer("❌ У вас нет активного диалога.")
+        return
+    
+    # Очищаем состояния
+    await state.clear()
+    
+    # Уведомляем пользователя
+    try:
+        user_state = await get_user_state(message.bot, state.storage, user_id)
+        await user_state.clear()
+        
+        await message.bot.send_message(
+            user_id,
+            "🔚 Оператор завершил диалог. Спасибо за обращение!",
+            reply_markup=get_main_menu()
+        )
+    except Exception as e:
+        logger.error(f"Ошибка уведомления пользователя: {e}")
+    
+    await message.answer("✅ Диалог завершен.")
+    logger.info(f"Админ {admin_id} завершил диалог с пользователем {user_id}")
+
+
+# ========== ПЕРЕСЫЛКА СООБЩЕНИЙ (ПОСЛЕ ОБРАБОТЧИКА ЗАВЕРШЕНИЯ!) ==========
 
 @router.message(SupportStates.USER_IN_DIALOG)
 async def user_message_in_dialog(message: Message, state: FSMContext):
@@ -168,11 +236,6 @@ async def user_message_in_dialog(message: Message, state: FSMContext):
 @router.message(SupportStates.ADMIN_IN_DIALOG)
 async def admin_message_in_dialog(message: Message, state: FSMContext):
     """Пересылка сообщений от админа к пользователю."""
-    # Проверяем команду завершения
-    if message.text and message.text.startswith('/end_support'):
-        await end_support_command(message, state)
-        return
-    
     data = await state.get_data()
     user_id = data.get('support_user_id')
     
@@ -218,91 +281,3 @@ async def admin_message_in_dialog(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка пересылки пользователю: {e}")
         await message.answer("❌ Ошибка отправки сообщения.")
-
-
-# ========== ЗАВЕРШЕНИЕ ДИАЛОГА ==========
-
-@router.message(F.text.contains("Завершить диалог"))
-async def user_end_dialog(message: Message, state: FSMContext, session: AsyncSession):
-    """Пользователь завершает диалог."""
-    data = await state.get_data()
-    admin_id = data.get('support_admin_id')
-    user_id = message.from_user.id
-    
-    if admin_id and user_id in active_dialogs:
-        # Удаляем диалог
-        del active_dialogs[user_id]
-        
-        # Очищаем состояния
-        await state.clear()
-        
-        # Уведомляем админа
-        try:
-            admin_state = FSMContext(
-                bot=message.bot,
-                storage=state.storage,
-                key=state.key.__class__(
-                    bot_id=state.key.bot_id,
-                    chat_id=admin_id,
-                    user_id=admin_id
-                )
-            )
-            await admin_state.clear()
-            
-            await message.bot.send_message(
-                admin_id,
-                f"🔚 Пользователь (ID: {user_id}) завершил диалог."
-            )
-        except Exception as e:
-            logger.error(f"Ошибка уведомления админа: {e}")
-        
-        # Проверяем, есть ли активный заказ
-        user_has_order = await has_active_order(session, user_id)
-        
-        await message.answer(
-            "✅ Диалог завершен. Спасибо за обращение!",
-            reply_markup=get_main_menu_with_cancel() if user_has_order else get_main_menu()
-        )
-        logger.info(f"Пользователь {user_id} завершил диалог с админом {admin_id}")
-    else:
-        await message.answer("❌ У вас нет активного диалога.")
-
-
-async def end_support_command(message: Message, state: FSMContext):
-    """Админ завершает диалог через команду."""
-    data = await state.get_data()
-    user_id = data.get('support_user_id')
-    admin_id = message.from_user.id
-    
-    if user_id and user_id in active_dialogs:
-        # Удаляем диалог
-        del active_dialogs[user_id]
-        
-        # Очищаем состояния
-        await state.clear()
-        
-        # Уведомляем пользователя
-        try:
-            user_state = FSMContext(
-                bot=message.bot,
-                storage=state.storage,
-                key=state.key.__class__(
-                    bot_id=state.key.bot_id,
-                    chat_id=user_id,
-                    user_id=user_id
-                )
-            )
-            await user_state.clear()
-            
-            await message.bot.send_message(
-                user_id,
-                "🔚 Оператор завершил диалог. Спасибо за обращение!",
-                reply_markup=get_main_menu()
-            )
-        except Exception as e:
-            logger.error(f"Ошибка уведомления пользователя: {e}")
-        
-        await message.answer("✅ Диалог завершен.")
-        logger.info(f"Админ {admin_id} завершил диалог с пользователем {user_id}")
-    else:
-        await message.answer("❌ У вас нет активного диалога.")

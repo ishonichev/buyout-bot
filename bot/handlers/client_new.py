@@ -1,7 +1,7 @@
 """Новая клиентская логика с пошаговой воронкой."""
 from aiogram import Router, F
 from aiogram.filters import CommandStart
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -12,8 +12,7 @@ from bot.database.models import User, Product, Order, OrderStatus, AnalyticsEven
 from bot.keyboards.client_keyboards import (
     get_main_menu,
     get_products_keyboard,
-    get_agreement_keyboard,
-    get_send_photo_keyboard
+    get_agreement_keyboard
 )
 from bot.states.client_states import ClientStates
 from bot.config import settings
@@ -191,10 +190,7 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
     step1_text = await get_config_text(session, "step_1_message")
     
     await callback.message.delete()
-    await callback.message.answer(
-        step1_text,
-        reply_markup=get_send_photo_keyboard()
-    )
+    await callback.message.answer(step1_text)
     await callback.answer()
 
 
@@ -250,7 +246,7 @@ async def basket_screenshot(message: Message, state: FSMContext, session: AsyncS
     await state.set_state(ClientStates.WAITING_BUY_SCREENSHOT)
     
     step2_text = await get_config_text(session, "step_2_message")
-    await message.answer(step2_text, reply_markup=get_send_photo_keyboard())
+    await message.answer(step2_text)
 
 
 @router.message(ClientStates.WAITING_BUY_SCREENSHOT, F.photo)
@@ -280,7 +276,7 @@ async def buy_screenshot(message: Message, state: FSMContext, session: AsyncSess
     await state.set_state(ClientStates.WAITING_RECEIVED_SCREENSHOT)
     
     step3_text = await get_config_text(session, "step_3_message")
-    await message.answer(step3_text, reply_markup=get_send_photo_keyboard())
+    await message.answer(step3_text)
 
 
 @router.message(ClientStates.WAITING_RECEIVED_SCREENSHOT, F.photo)
@@ -310,7 +306,7 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     await state.set_state(ClientStates.WAITING_REVIEW_SCREENSHOT)
     
     step4_text = await get_config_text(session, "step_4_message")
-    await message.answer(step4_text, reply_markup=get_send_photo_keyboard())
+    await message.answer(step4_text)
 
 
 @router.message(ClientStates.WAITING_REVIEW_SCREENSHOT, F.photo)
@@ -362,7 +358,7 @@ async def payment_details(message: Message, state: FSMContext, session: AsyncSes
     pending_text = await get_config_text(session, "order_pending_message")
     await message.answer(pending_text)
     
-    # Отправляем всё админам
+    # Отправляем всё админам (АЛЬБОМОМ!)
     from bot.keyboards.admin_keyboards import get_order_moderation_keyboard
     
     for admin_id in settings.admin_ids:
@@ -375,15 +371,22 @@ async def payment_details(message: Message, state: FSMContext, session: AsyncSes
                 f"💳 Реквизиты: {message.text}\n"
             )
             
-            # Отправляем все фото
+            # Отправляем все фото АЛЬБОМОМ (MediaGroup)
             await message.bot.send_message(admin_id, admin_text)
-            await message.bot.send_photo(admin_id, data['basket_photo'], caption="📦 Корзина")
-            await message.bot.send_photo(admin_id, data['buy_photo'], caption="💳 Покупка")
-            await message.bot.send_photo(admin_id, data['received_photo'], caption="📦 Получено")
-            await message.bot.send_photo(
+            
+            media_group = [
+                InputMediaPhoto(media=data['basket_photo'], caption="📦 Корзина"),
+                InputMediaPhoto(media=data['buy_photo'], caption="💳 Покупка"),
+                InputMediaPhoto(media=data['received_photo'], caption="📦 Получено"),
+                InputMediaPhoto(media=data['review_photo'], caption="⭐ Отзыв")
+            ]
+            
+            await message.bot.send_media_group(admin_id, media=media_group)
+            
+            # Кнопки модерации отправляем отдельным сообщением
+            await message.bot.send_message(
                 admin_id,
-                data['review_photo'],
-                caption="⭐ Отзыв",
+                "👇 Действия:",
                 reply_markup=get_order_moderation_keyboard(order_id)
             )
         except Exception as e:

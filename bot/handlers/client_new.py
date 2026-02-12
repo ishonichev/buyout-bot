@@ -11,6 +11,7 @@ from datetime import datetime
 from bot.database.models import User, Product, Order, OrderStatus, AnalyticsEvent, BotConfig
 from bot.keyboards.client_keyboards import (
     get_main_menu,
+    get_main_menu_with_cancel,
     get_products_keyboard,
     get_agreement_keyboard
 )
@@ -31,8 +32,25 @@ async def get_config_text(session: AsyncSession, key: str) -> str:
     return config.config_value if config else "Не настроено"
 
 
+async def has_active_order(session: AsyncSession, user_id: int) -> bool:
+    """Проверка наличия активного заказа."""
+    result = await session.execute(
+        select(Order).where(
+            Order.user_id == user_id,
+            Order.status.in_([
+                OrderStatus.STARTED,
+                OrderStatus.BASKET_SENT,
+                OrderStatus.BUY_SENT,
+                OrderStatus.RECEIVED,
+                OrderStatus.REVIEW_SENT
+            ])
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
 @router.message(CommandStart())
-async def cmd_start(message: Message, session: AsyncSession, user: User, sheets_service: SheetsService):
+async def cmd_start(message: Message, session: AsyncSession, user: User, state: FSMContext, sheets_service: SheetsService):
     """Обработка команды /start."""
     # Аналитика
     event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
@@ -45,9 +63,12 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, sheets_
     # Получаем текст из конфига
     welcome_text = await get_config_text(session, "welcome_message")
     
+    # Проверяем, есть ли активный заказ
+    active_order = await has_active_order(session, user.tg_id)
+    
     await message.answer(
         welcome_text,
-        reply_markup=get_main_menu()
+        reply_markup=get_main_menu_with_cancel() if active_order else get_main_menu()
     )
     logger.info(f"Пользователь {user.tg_id} запустил бота")
 
@@ -55,6 +76,14 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, sheets_
 @router.message(F.text.contains("Выбрать товар"))
 async def select_product(message: Message, session: AsyncSession, user: User, sheets_service: SheetsService):
     """Выбор товара."""
+    # Проверяем, нет ли уже активного заказа
+    if await has_active_order(session, user.tg_id):
+        await message.answer(
+            "❌ У вас уже есть активный заказ!\n"
+            "Используйте кнопку \"Отменить прогресс\", чтобы начать заново."
+        )
+        return
+    
     # Аналитика
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_1")
     session.add(event)
@@ -76,11 +105,48 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     )
 
 
-@router.message(F.text.contains("Есть вопросы"))
-async def ask_question(message: Message, user: User):
-    """Обработка вопросов."""
+@router.message(F.text.contains("Отменить прогресс"))
+async def cancel_progress(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    """Отмена текущего заказа."""
+    # Находим активный заказ
+    result = await session.execute(
+        select(Order).where(
+            Order.user_id == user.tg_id,
+            Order.status.in_([
+                OrderStatus.STARTED,
+                OrderStatus.BASKET_SENT,
+                OrderStatus.BUY_SENT,
+                OrderStatus.RECEIVED,
+                OrderStatus.REVIEW_SENT
+            ])
+        )
+    )
+    order = result.scalar_one_or_none()
+    
+    if order:
+        # Отменяем заказ
+        await session.delete(order)
+        await session.commit()
+        
+        # Очищаем FSM
+        await state.clear()
+        
+        await message.answer(
+            "✅ Прогресс отменен. Можете выбрать новый товар.",
+            reply_markup=get_main_menu()
+        )
+        logger.info(f"Пользователь {user.tg_id} отменил заказ #{order.id}")
+    else:
+        await message.answer("❌ У вас нет активных заказов.")
+
+
+@router.message(F.text.contains("Поддержка"))
+async def ask_support(message: Message, user: User):
+    """Обработка запроса поддержки."""
+    from bot.keyboards.client_keyboards import get_support_admin_keyboard
+    
     admin_text = (
-        f"👤 Пользователь просит помощи!\n\n"
+        f"💬 Пользователь просит поддержки!\n\n"
         f"🆔 ID: {user.tg_id}\n"
         f"👤 Имя: {message.from_user.full_name}\n"
     )
@@ -90,7 +156,11 @@ async def ask_question(message: Message, user: User):
     
     for admin_id in settings.admin_ids:
         try:
-            await message.bot.send_message(admin_id, admin_text)
+            await message.bot.send_message(
+                admin_id,
+                admin_text,
+                reply_markup=get_support_admin_keyboard(user.tg_id)
+            )
         except Exception as e:
             logger.error(f"Ошибка отправки админу {admin_id}: {e}")
     
@@ -104,13 +174,6 @@ async def ask_question(message: Message, user: User):
 async def empty_product(callback: CallbackQuery):
     """Пустой слот товара."""
     await callback.answer("❌ Товара пока нет", show_alert=True)
-
-
-@router.callback_query(F.data == "back_to_main")
-async def back_to_main(callback: CallbackQuery):
-    """Возврат в главное меню."""
-    await callback.message.delete()
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("product:"))
@@ -189,16 +252,22 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
     # Получаем текст Шага 1
     step1_text = await get_config_text(session, "step_1_message")
     
+    # Меняем клавиатуру на меню с кнопкой отмены
     await callback.message.delete()
-    await callback.message.answer(step1_text)
+    await callback.message.answer(
+        step1_text,
+        reply_markup=get_main_menu_with_cancel()
+    )
     await callback.answer()
 
 
 @router.callback_query(F.data == "ask_question")
 async def ask_question_callback(callback: CallbackQuery, user: User):
     """Вопрос через callback."""
+    from bot.keyboards.client_keyboards import get_support_admin_keyboard
+    
     admin_text = (
-        f"👤 Пользователь просит помощи!\n\n"
+        f"💬 Пользователь просит поддержки!\n\n"
         f"🆔 ID: {user.tg_id}\n"
         f"👤 Имя: {callback.from_user.full_name}\n"
     )
@@ -208,7 +277,11 @@ async def ask_question_callback(callback: CallbackQuery, user: User):
     
     for admin_id in settings.admin_ids:
         try:
-            await callback.bot.send_message(admin_id, admin_text)
+            await callback.bot.send_message(
+                admin_id,
+                admin_text,
+                reply_markup=get_support_admin_keyboard(user.tg_id)
+            )
         except Exception as e:
             logger.error(f"Ошибка {admin_id}: {e}")
     
@@ -356,7 +429,10 @@ async def payment_details(message: Message, state: FSMContext, session: AsyncSes
     
     # Отправляем сообщение пользователю
     pending_text = await get_config_text(session, "order_pending_message")
-    await message.answer(pending_text)
+    await message.answer(
+        pending_text,
+        reply_markup=get_main_menu()  # Возвращаем обычное меню
+    )
     
     # Отправляем всё админам (АЛЬБОМОМ!)
     from bot.keyboards.admin_keyboards import get_order_moderation_keyboard

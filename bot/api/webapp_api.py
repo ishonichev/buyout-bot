@@ -102,7 +102,10 @@ async def get_db() -> AsyncSession:
 @app.get("/")
 async def serve_index():
     """Отдает главную страницу Web App."""
-    return FileResponse("bot/web_app/index.html")
+    return FileResponse(
+        "bot/web_app/index.html",
+        media_type="text/html; charset=utf-8"
+    )
 
 
 @app.get("/api/products")

@@ -8,7 +8,7 @@ def get_main_menu() -> ReplyKeyboardMarkup:
     """Главное меню клиента."""
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🛍️ Выбрать товар")],
+            [KeyboardButton(text="🛋️ Выбрать товар")],
             [KeyboardButton(text="👥 Поддержка")]
         ],
         resize_keyboard=True
@@ -81,7 +81,7 @@ def get_agreement_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="❓ Есть вопросы",
+                text="👥 Поддержка",
                 callback_data="ask_question"
             )
         ]

@@ -8,8 +8,31 @@ def get_main_menu() -> ReplyKeyboardMarkup:
     """Главное меню клиента."""
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🛋️ Выбрать товар")],
-            [KeyboardButton(text="❓ Есть вопросы")]
+            [KeyboardButton(text="🛍️ Выбрать товар")],
+            [KeyboardButton(text="👥 Поддержка")]
+        ],
+        resize_keyboard=True
+    )
+    return keyboard
+
+
+def get_main_menu_with_cancel() -> ReplyKeyboardMarkup:
+    """Меню с кнопкой отмены прогресса."""
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="❌ Отменить прогресс")],
+            [KeyboardButton(text="👥 Поддержка")]
+        ],
+        resize_keyboard=True
+    )
+    return keyboard
+
+
+def get_support_menu() -> ReplyKeyboardMarkup:
+    """Меню в режиме поддержки."""
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🔚 Завершить диалог")]
         ],
         resize_keyboard=True
     )
@@ -41,13 +64,7 @@ def get_products_keyboard(products: List[Product]) -> InlineKeyboardMarkup:
                 )
             ])
     
-    # Кнопка назад
-    buttons.append([
-        InlineKeyboardButton(
-            text="◀️ Назад",
-            callback_data="back_to_main"
-        )
-    ])
+    # Кнопку "Назад" УБРАЛИ (по ТЗ)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
@@ -72,13 +89,20 @@ def get_agreement_keyboard() -> InlineKeyboardMarkup:
     return keyboard
 
 
-def get_send_photo_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для отправки фото."""
+# Кнопки для админов (поддержка)
+def get_support_admin_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура для админа при запросе поддержки."""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="📤 Отправить фото",
-                callback_data="send_photo_reminder"
+                text="✅ Откликнуться",
+                callback_data=f"support_respond:{user_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="❌ Игнорировать",
+                callback_data=f"support_ignore:{user_id}"
             )
         ]
     ])

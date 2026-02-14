@@ -25,6 +25,17 @@ def upgrade() -> None:
     # Добавляем поле cashback_amount в таблицу orders
     with op.batch_alter_table('orders', schema=None) as batch_op:
         batch_op.add_column(sa.Column('cashback_amount', sa.Float(), nullable=True))
+    
+    # ВАЖНО: Сбрасываем sequence для products.id
+    # Это нужно потому что в таблице уже могут быть записи с ID 1-4
+    # А sequence начинается с 1, что вызывает конфликт
+    op.execute("""
+        SELECT setval(
+            pg_get_serial_sequence('products', 'id'),
+            COALESCE((SELECT MAX(id) FROM products), 0) + 1,
+            false
+        );
+    """)
 
 
 def downgrade() -> None:

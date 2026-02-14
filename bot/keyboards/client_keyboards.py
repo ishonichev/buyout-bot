@@ -8,7 +8,7 @@ def get_main_menu() -> ReplyKeyboardMarkup:
     """Главное меню клиента."""
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🛋️ Выбрать товар")],
+            [KeyboardButton(text="🛍️ Выбрать товар")],
             [KeyboardButton(text="👥 Поддержка")]
         ],
         resize_keyboard=True
@@ -40,31 +40,27 @@ def get_support_menu() -> ReplyKeyboardMarkup:
 
 
 def get_products_keyboard(products: List[Product]) -> InlineKeyboardMarkup:
-    """Клавиатура выбора товара (до 4 слотов)."""
+    """Клавиатура выбора товара (динамическая)."""
     buttons = []
     
-    # Создаем 4 слота (ID 1-4)
-    for slot_id in range(1, 5):
-        product = next((p for p in products if p.id == slot_id), None)
-        
-        if product and product.is_active:
-            # Активный товар
+    # Создаем кнопки для всех активных товаров
+    for product in products:
+        if product.is_active:
             buttons.append([
                 InlineKeyboardButton(
-                    text=f"🛍 {product.name}",
+                    text=f"🛍 ‍{product.name}",
                     callback_data=f"product:{product.id}"
                 )
             ])
-        else:
-            # Пустой слот
-            buttons.append([
-                InlineKeyboardButton(
-                    text="⬜️ Нет товара",
-                    callback_data="empty"
-                )
-            ])
     
-    # Кнопку "Назад" УБРАЛИ (по ТЗ)
+    # Если нет активных товаров
+    if not buttons:
+        buttons.append([
+            InlineKeyboardButton(
+                text="⬜️ Нет доступных товаров",
+                callback_data="empty"
+            )
+        ])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard

@@ -1,9 +1,15 @@
 # Сводка всех изменений в ветке fix/product-id-sequence
 
-## Быстрый старт
+## ⚡ Быстрый старт
+
+⚠️ **ВАЖНО:** Ваш контейнер называется `bot`, а не `buyout_bot`!
+
+### Быстрое исправление (1 минута)
+
+См. **[QUICK_FIX.md](QUICK_FIX.md)** - пошаговая инструкция!
 
 ```bash
-# 1. Переключиться на ветку
+# 1. Обновить код
 git checkout fix/product-id-sequence
 git pull origin fix/product-id-sequence
 
@@ -11,11 +17,16 @@ git pull origin fix/product-id-sequence
 docker-compose down
 docker-compose up -d
 
-# 3. Применить миграцию
-docker-compose exec buyout_bot alembic upgrade head
+# 3. Исправить sequence (Выберите ОДИН из вариантов)
+
+# ВАРИАНТ A: Через SQL скрипт (рекомендуется)
+docker-compose exec -T postgres psql -U buyout_user -d buyout_bot_db < scripts/reset_products_sequence.sql
+
+# ВАРИАНТ B: Через Alembic
+docker-compose exec bot alembic upgrade head
 
 # 4. Проверить
-docker-compose logs -f buyout_bot
+docker-compose logs -f bot
 ```
 
 ## Все исправления
@@ -34,6 +45,11 @@ docker-compose logs -f buyout_bot
 **Файл:** `alembic/versions/001_add_cashback_and_dynamic_products.py`  
 **Проблема:** Sequence не синхронизирован с существующими ID  
 **Решение:** Автоматический сброс sequence в миграции
+
+### 4. ✅ ImportError в alembic/env.py
+**Файл:** `alembic/env.py`  
+**Проблема:** `cannot import name 'DATABASE_URL' from 'bot.config'`  
+**Решение:** Исправлен на `from bot.config import settings` и `settings.DATABASE_URL`
 
 ## Новый функционал
 
@@ -76,8 +92,9 @@ main (production)
 
 ## Документация
 
+- **[QUICK_FIX.md](QUICK_FIX.md)** - 🔥 Быстрое исправление (1 минута)
 - **[GITFLOW.md](GITFLOW.md)** - Полная инструкция по GitFlow
-- **[FIX_PRODUCT_SEQUENCE.md](FIX_PRODUCT_SEQUENCE.md)** - Исправление sequence
+- **[FIX_PRODUCT_SEQUENCE.md](FIX_PRODUCT_SEQUENCE.md)** - Детали исправления sequence
 - **[FIX_SUMMARY.md](FIX_SUMMARY.md)** - Сводка исправлений fix/imports-and-docker
 - **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Инструкция по миграциям
 
@@ -85,7 +102,7 @@ main (production)
 
 ### 1. Проверить запуск бота
 ```bash
-docker-compose logs -f buyout_bot
+docker-compose logs -f bot
 # Не должно быть ImportError
 ```
 

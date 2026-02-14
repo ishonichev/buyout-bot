@@ -147,12 +147,12 @@ async def create_product(
     admin_id: int = Depends(verify_admin),
     session: AsyncSession = Depends(get_db)
 ):
-    """Создать новый товар."""
+    """Создать новый товар (АКТИВНЫЙ ПО УМОЛЧАНИЮ!)."""
     product = Product(
         name=data.name,
         cashback=data.cashback,
         instruction_text=data.instruction_text,
-        is_active=False
+        is_active=True  # АКТИВНЫЙ ПО УМОЛЧАНИЮ!
     )
     session.add(product)
     await session.commit()

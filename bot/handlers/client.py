@@ -220,10 +220,10 @@ async def select_product_callback(callback: CallbackQuery, session: AsyncSession
         username=username
     )
     
-    # Отправляем инструкцию С КЕШБЕКОМ
+    # Отправляем инструкцию С КЕШБЕКОМ В ПРОЦЕНТАХ
     instruction_with_cashback = (
         f"📦 <b>Товар:</b> {product.name}\n"
-        f"💰 <b>Кешбек:</b> {product.cashback} руб.\n\n"
+        f"💰 <b>Кешбек:</b> {product.cashback}%\n\n"
         f"{product.instruction_text}"
     )
     
@@ -235,7 +235,7 @@ async def select_product_callback(callback: CallbackQuery, session: AsyncSession
     )
     await callback.answer()
     
-    logger.info(f"Пользователь {user.tg_id} выбрал товар {product.name} (кешбек: {product.cashback})")
+    logger.info(f"Пользователь {user.tg_id} выбрал товар {product.name} (кешбек: {product.cashback}%)")
 
 
 @router.callback_query(F.data == "agree")

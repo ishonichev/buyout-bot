@@ -1,6 +1,7 @@
 """Настройка подключения к базе данных."""
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import text
 from bot.config import settings
 import logging
 
@@ -48,21 +49,18 @@ async def init_db():
     
     logger.info("Таблицы базы данных созданы")
     
-    # Инициализируем 4 товара
+    # Автоматический сброс sequence для products
     async with async_session_maker() as session:
-        from sqlalchemy import select
-        result = await session.execute(select(Product))
-        products = result.scalars().all()
-        
-        if len(products) == 0:
-            for i in range(1, 5):
-                product = Product(
-                    id=i,
-                    name=f"Товар {i}",
-                    is_active=False,
-                    instruction_text="Инструкция не установлена"
+        try:
+            # Сброс sequence на основе максимального ID
+            await session.execute(text("""
+                SELECT setval(
+                    'products_id_seq',
+                    COALESCE((SELECT MAX(id) FROM products), 0) + 1,
+                    false
                 )
-                session.add(product)
-            
+            """))
             await session.commit()
-            logger.info("Создано 4 пустых товара")
+            logger.info("Sequence для products сброшен")
+        except Exception as e:
+            logger.warning(f"Не удалось сбросить sequence: {e}")

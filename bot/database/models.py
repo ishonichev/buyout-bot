@@ -1,6 +1,6 @@
 """Модели базы данных."""
 from datetime import datetime
-from sqlalchemy import BigInteger, String, Integer, Boolean, DateTime, Text, Enum as SQLEnum
+from sqlalchemy import BigInteger, String, Integer, Boolean, DateTime, Text, Enum as SQLEnum, Float
 from sqlalchemy.orm import Mapped, mapped_column
 from bot.database.database import Base
 import enum
@@ -32,11 +32,12 @@ class User(Base):
 
 
 class Product(Base):
-    """Модель товара (упрощенная)."""
+    """Модель товара (теперь динамическая)."""
     __tablename__ = "products"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1-4 (фиксированные слоты)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    cashback: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # Новое поле
     instruction_text: Mapped[str] = mapped_column(Text, nullable=False)  # ВСЁ в одной инструкции
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -71,6 +72,9 @@ class Order(Base):
     
     # Реквизиты для кэшбэка
     payment_details: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Сумма кешбека (вводится админом)
+    cashback_amount: Mapped[float] = mapped_column(Float, nullable=True)
     
     # Причина отклонения (если админ отклонил)
     rejection_reason: Mapped[str] = mapped_column(Text, nullable=True)

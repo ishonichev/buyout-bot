@@ -102,24 +102,24 @@ class SheetsService:
             await self.sheet1.update('A1:G1', [sheet1_headers])
             logger.info("Заголовки Листа 1 созданы")
         
-        # Заголовки для Листа 2 (Аналитика)
+        # Заголовки для Листа 2 (Аналитика) - ОБНОВЛЕННЫЕ НАЗВАНИЯ
         sheet2_headers = [
             "",
             "Запустили бот", 
-            "Нажали кнопку 1",
-            "Нажали кнопку 2",
-            "Нажали кнопку 3",
-            "Нажали кнопку 4",
-            "Нажали кнопку 5",
-            "Нажали кнопку 6",
-            "Нажали кнопку 7"
+            "Выбрали товар",
+            "Приняли инструкцию",
+            "Отправили скриншот товара в корзине",
+            "Отправили скриншот покупки",
+            "Отправили фотографию товара",
+            "Отправили скриншот опубликованного отзыва",
+            "Отправили реквизиты"
         ]
         first_row = await self.sheet2.row_values(1)
         
         if not first_row or len(first_row) < 2 or first_row[1] != "Запустили бот":
             await self.sheet2.update('A1:I1', [sheet2_headers])
             await self.sheet2.update('A2', [["Кол-во"]])
-            await self.sheet2.update('A3', [["%"]])
+            await self.sheet2.update('A3', [["% "]])
             # Инициализируем нулями
             await self.sheet2.update('B2:I2', [[0] * 8])
             await self.sheet2.update('B3:I3', [["100%"] + ["0%"] * 7])

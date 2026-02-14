@@ -92,8 +92,10 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     if sheets_service:
         sheets_service.increment_analytics_event("button_1", user.tg_id)
     
-    # Получаем товары
-    result = await session.execute(select(Product).order_by(Product.id).limit(4))
+    # Получаем все активные товары (без лимита 4)
+    result = await session.execute(
+        select(Product).where(Product.is_active == True).order_by(Product.id)
+    )
     products = result.scalars().all()
     
     # Получаем текст
@@ -178,7 +180,7 @@ async def empty_product(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("product:"))
 async def select_product_callback(callback: CallbackQuery, session: AsyncSession, user: User, state: FSMContext, sheets_service: SheetsService):
-    """Выбор товара - показ инструкции."""
+    """Выбор товара - показ инструкции с кешбеком."""
     product_id = int(callback.data.split(":")[1])
     
     # Аналитика
@@ -218,15 +220,22 @@ async def select_product_callback(callback: CallbackQuery, session: AsyncSession
         username=username
     )
     
-    # Отправляем инструкцию (только текст из Product)
+    # Отправляем инструкцию С КЕШБЕКОМ
+    instruction_with_cashback = (
+        f"📦 <b>Товар:</b> {product.name}\n"
+        f"💰 <b>Кешбек:</b> {product.cashback} руб.\n\n"
+        f"{product.instruction_text}"
+    )
+    
     await callback.message.delete()
     await callback.message.answer(
-        product.instruction_text,
-        reply_markup=get_agreement_keyboard()
+        instruction_with_cashback,
+        reply_markup=get_agreement_keyboard(),
+        parse_mode="HTML"
     )
     await callback.answer()
     
-    logger.info(f"Пользователь {user.tg_id} выбрал товар {product.name}")
+    logger.info(f"Пользователь {user.tg_id} выбрал товар {product.name} (кешбек: {product.cashback})")
 
 
 @router.callback_query(F.data == "agree")

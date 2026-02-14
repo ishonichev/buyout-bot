@@ -26,18 +26,21 @@ docker-compose up -d
 
 ### Шаг 3: Исправить sequence в базе данных
 
-**Вариант A: Через SQL скрипт (рекомендуется)**
+**Вариант A: Через bash скрипт (рекомендуется)** ⭐
 
 ```bash
-# Скопировать скрипт в контейнер с PostgreSQL
-docker-compose exec -T postgres psql -U buyout_user -d buyout_bot_db < scripts/reset_products_sequence.sql
+# Сделать скрипт исполняемым
+chmod +x scripts/reset_sequence.sh
+
+# Запустить
+./scripts/reset_sequence.sh
 ```
 
 **Вариант B: Вручную через psql**
 
 ```bash
 # Подключиться к базе данных
-docker-compose exec postgres psql -U buyout_user -d buyout_bot_db
+docker-compose exec postgres psql -U postgres -d buyout_bot
 
 # Выполнить команду сброса sequence
 SELECT setval(
@@ -50,28 +53,23 @@ SELECT setval(
 \q
 ```
 
-### Шаг 4: Проверить
-
-1. Откройте веб-панель в боте: `/admin`
-2. Нажмите "⊕ Добавить товар"
-3. Товар должен создаться без ошибок
-
-## Если используете Alembic миграции
-
-Если вы хотите применить миграцию через Alembic:
+**Вариант C: Через Alembic**
 
 ```bash
-# Применить миграцию (имя контейнера - bot, не buyout_bot!)
 docker-compose exec bot alembic upgrade head
 ```
 
-**Примечание:** Контейнер называется `bot` в вашем docker-compose.yml, а не `buyout_bot`!
+### Шаг 4: Проверить
+
+1. Откройте веб-панель в боте: `/admin`
+2. Нажмите "➕ Добавить товар"
+3. Товар должен создаться без ошибок
 
 ## Проверка что всё работает
 
 ```bash
 # Проверить текущее значение sequence
-docker-compose exec postgres psql -U buyout_user -d buyout_bot_db -c "
+docker-compose exec postgres psql -U postgres -d buyout_bot -c "
 SELECT 
     'MAX ID' as info, COALESCE(MAX(id), 0) as value FROM products
 UNION ALL
@@ -90,6 +88,13 @@ SELECT
 
 Sequence должен быть больше чем MAX ID!
 
+## Важная информация
+
+⚠️ **Параметры вашей БД (из docker-compose.yml):**
+- **Имя БД:** `buyout_bot` (не `buyout_bot_db`!)
+- **Пользователь:** `postgres` (не `buyout_user`!)
+- **Контейнер бота:** `bot` (не `buyout_bot`!)
+
 ## Если всё ещё не работает
 
 ### Проверить имя контейнера
@@ -97,8 +102,6 @@ Sequence должен быть больше чем MAX ID!
 ```bash
 # Посмотреть список запущенных контейнеров
 docker-compose ps
-
-# Найти контейнер с ботом (может называться bot, buyout_bot, telegram-buyout-bot_bot)
 ```
 
 ### Посмотреть логи
@@ -107,14 +110,14 @@ docker-compose ps
 # Логи бота
 docker-compose logs -f bot
 
-# Если контейнер называется по-другому:
-docker-compose logs -f buyout_bot
+# Логи PostgreSQL
+docker-compose logs -f postgres
 ```
 
 ### Пересоздать базу данных (ВНИМАНИЕ: удалит все данные!)
 
 ```bash
-# Остановить контейнеры
+# Остановить контейнеры и удалить тома
 docker-compose down -v
 
 # Запустить заново
@@ -126,10 +129,11 @@ docker-compose exec bot alembic upgrade head
 
 ## Что было исправлено
 
-✅ Исправлен импорт в `alembic/env.py` (DATABASE_URL → settings.DATABASE_URL)
-✅ Добавлен SQL скрипт для ручного сброса sequence
-✅ Миграция автоматически сбрасывает sequence
-✅ Добавлена документация для быстрого исправления
+✅ Исправлен импорт в `alembic/env.py` (DATABASE_URL → settings.DATABASE_URL)  
+✅ Добавлен SQL скрипт для ручного сброса sequence  
+✅ Добавлен bash скрипт для автоматического сброса  
+✅ Миграция автоматически сбрасывает sequence  
+✅ Добавлена полная документация  
 
 ## Следующие шаги
 

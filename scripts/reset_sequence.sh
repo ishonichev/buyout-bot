@@ -6,7 +6,7 @@ echo ""
 
 # Проверка текущего состояния
 echo "🔍 Проверка текущего состояния..."
-docker-compose exec postgres psql -U postgres -d buyout_bot -c "
+sudo docker-compose exec postgres psql -U buyout_user -d buyout_bot -c "
 SELECT 
     'MAX ID in products' as info,
     COALESCE(MAX(id), 0) as value 
@@ -22,7 +22,7 @@ echo ""
 echo "🔧 Сбрасываем sequence..."
 
 # Сброс sequence
-docker-compose exec postgres psql -U postgres -d buyout_bot -c "
+sudo docker-compose exec postgres psql -U buyout_user -d buyout_bot -c "
 SELECT setval(
     pg_get_serial_sequence('products', 'id'),
     COALESCE((SELECT MAX(id) FROM products), 0) + 1,
@@ -32,7 +32,7 @@ SELECT setval(
 
 echo ""
 echo "✅ Проверка результата..."
-docker-compose exec postgres psql -U postgres -d buyout_bot -c "
+sudo docker-compose exec postgres psql -U buyout_user -d buyout_bot -c "
 SELECT 
     'New sequence value' as info,
     last_value as value 

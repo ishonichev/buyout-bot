@@ -9,13 +9,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bot.database.models import Base
-from bot.config import DATABASE_URL
+from bot.config import settings
 
 # this is the Alembic Config object
 config = context.config
 
 # Override sqlalchemy.url from environment variable
-config.set_main_option('sqlalchemy.url', DATABASE_URL)
+# Replace asyncpg with psycopg2 for synchronous Alembic migrations
+database_url = settings.database_url.replace('postgresql+asyncpg://', 'postgresql://')
+config.set_main_option('sqlalchemy.url', database_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:

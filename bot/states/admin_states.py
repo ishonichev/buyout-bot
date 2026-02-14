@@ -6,6 +6,7 @@ class AdminStates(StatesGroup):
     """Состояния администратора."""
     
     # Модерация заказов
+    WAITING_CASHBACK_AMOUNT = State()  # Ожидание суммы кешбека
     WAITING_PAYMENT_SCREENSHOT = State()  # Ожидание скрина перевода
     WAITING_REJECTION_REASON = State()  # Ожидание причины отказа
     

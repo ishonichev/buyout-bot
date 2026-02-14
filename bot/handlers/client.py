@@ -92,8 +92,10 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     if sheets_service:
         sheets_service.increment_analytics_event("button_1", user.tg_id)
     
-    # Получаем товары
-    result = await session.execute(select(Product).order_by(Product.id).limit(4))
+    # Получаем все активные товары (без лимита 4)
+    result = await session.execute(
+        select(Product).where(Product.is_active == True).order_by(Product.id)
+    )
     products = result.scalars().all()
     
     # Получаем текст
@@ -178,7 +180,7 @@ async def empty_product(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("product:"))
 async def select_product_callback(callback: CallbackQuery, session: AsyncSession, user: User, state: FSMContext, sheets_service: SheetsService):
-    """Выбор товара - показ инструкции."""
+    """Выбор товара - показ инструкции с кешбеком. ЗАКАЗ ЕЩЁ НЕ СОЗДАЁТСЯ!"""
     product_id = int(callback.data.split(":")[1])
     
     # Аналитика
@@ -199,44 +201,53 @@ async def select_product_callback(callback: CallbackQuery, session: AsyncSession
         await callback.answer("❌ Товар недоступен", show_alert=True)
         return
     
-    # Создаем заказ
-    order = Order(
-        user_id=user.tg_id,
-        product_id=product.id,
-        status=OrderStatus.STARTED
-    )
-    session.add(order)
-    await session.commit()
-    
-    # Сохраняем в состояние
+    # СОХРАНЯЕМ ДАННЫЕ В STATE (без создания заказа)
     username = f"@{callback.from_user.username}" if callback.from_user.username else callback.from_user.full_name
     
     await state.update_data(
-        order_id=order.id,
         product_id=product.id,
         product_name=product.name,
         username=username
     )
     
-    # Отправляем инструкцию (только текст из Product)
+    # Отправляем инструкцию С КЕШБЕКОМ В ПРОЦЕНТАХ
+    instruction_with_cashback = (
+        f"📦 <b>Товар:</b> {product.name}\n"
+        f"💰 <b>Кешбек:</b> {product.cashback}%\n\n"
+        f"{product.instruction_text}"
+    )
+    
     await callback.message.delete()
     await callback.message.answer(
-        product.instruction_text,
-        reply_markup=get_agreement_keyboard()
+        instruction_with_cashback,
+        reply_markup=get_agreement_keyboard(),
+        parse_mode="HTML"
     )
     await callback.answer()
     
-    logger.info(f"Пользователь {user.tg_id} выбрал товар {product.name}")
+    logger.info(f"Пользователь {user.tg_id} выбрал товар {product.name} (кешбек: {product.cashback}%)")
 
 
 @router.callback_query(F.data == "agree")
 async def agree_instruction(callback: CallbackQuery, state: FSMContext, session: AsyncSession, user: User, sheets_service: SheetsService):
-    """Согласие с инструкцией - ШАГ 1."""
+    """Согласие с инструкцией - ШАГ 1. ТОЛЬКО ЗДЕСЬ СОЗДАЁТСЯ ЗАКАЗ!"""
     data = await state.get_data()
     
-    if not data.get('order_id'):
+    if not data.get('product_id'):
         await callback.answer("❌ Сначала выберите товар", show_alert=True)
         return
+    
+    # СОЗДАЁМ ЗАКАЗ ТОЛЬКО ПОСЛЕ СОГЛАСИЯ!
+    order = Order(
+        user_id=user.tg_id,
+        product_id=data['product_id'],
+        status=OrderStatus.STARTED
+    )
+    session.add(order)
+    await session.commit()
+    
+    # Сохраняем order_id в state
+    await state.update_data(order_id=order.id)
     
     # Аналитика
     event = AnalyticsEvent(user_id=user.tg_id, event_type="button_3")
@@ -259,6 +270,8 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
         reply_markup=get_main_menu_with_cancel()
     )
     await callback.answer()
+    
+    logger.info(f"Пользователь {user.tg_id} согласился с инструкцией, создан заказ #{order.id}")
 
 
 @router.callback_query(F.data == "ask_question")

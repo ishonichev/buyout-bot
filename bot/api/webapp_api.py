@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Optional
 import logging
@@ -24,6 +24,13 @@ app = FastAPI(title="Buyout Bot Admin API")
 # Pydantic модели
 class ProductUpdate(BaseModel):
     name: str
+    cashback: float
+    instruction_text: str
+
+
+class ProductCreate(BaseModel):
+    name: str
+    cashback: float
     instruction_text: str
 
 
@@ -121,15 +128,38 @@ async def get_products(
         {
             "id": p.id,
             "name": p.name,
+            "cashback": p.cashback,
             "instruction_text": p.instruction_text,
             "is_active": p.is_active
         }
         for p in products
     ]
     
-    # Возвращаем JSON с явной кодировкой UTF-8
     return JSONResponse(
         content=data,
+        media_type="application/json; charset=utf-8"
+    )
+
+
+@app.post("/api/products")
+async def create_product(
+    data: ProductCreate,
+    admin_id: int = Depends(verify_admin),
+    session: AsyncSession = Depends(get_db)
+):
+    """Создать новый товар (АКТИВНЫЙ ПО УМОЛЧАНИЮ!)."""
+    product = Product(
+        name=data.name,
+        cashback=data.cashback,
+        instruction_text=data.instruction_text,
+        is_active=True  # АКТИВНЫЙ ПО УМОЛЧАНИЮ!
+    )
+    session.add(product)
+    await session.commit()
+    await session.refresh(product)
+    
+    return JSONResponse(
+        content={"status": "ok", "id": product.id},
         media_type="application/json; charset=utf-8"
     )
 
@@ -142,30 +172,43 @@ async def update_product(
     session: AsyncSession = Depends(get_db)
 ):
     """Обновить товар."""
-    logger.info(f"Получены данные: name={data.name}, instruction={data.instruction_text}")
-    
     result = await session.execute(
         select(Product).where(Product.id == product_id)
     )
     product = result.scalar_one_or_none()
     
     if not product:
-        # Создаем новый
-        product = Product(
-            id=product_id,
-            name=data.name,
-            instruction_text=data.instruction_text,
-            is_active=False
-        )
-        session.add(product)
-    else:
-        product.name = data.name
-        product.instruction_text = data.instruction_text
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    product.name = data.name
+    product.cashback = data.cashback
+    product.instruction_text = data.instruction_text
     
     await session.commit()
-    await session.refresh(product)
     
-    logger.info(f"Сохранено в БД: name={product.name}")
+    return JSONResponse(
+        content={"status": "ok"},
+        media_type="application/json; charset=utf-8"
+    )
+
+
+@app.delete("/api/products/{product_id}")
+async def delete_product(
+    product_id: int,
+    admin_id: int = Depends(verify_admin),
+    session: AsyncSession = Depends(get_db)
+):
+    """Удалить товар."""
+    result = await session.execute(
+        select(Product).where(Product.id == product_id)
+    )
+    product = result.scalar_one_or_none()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    await session.delete(product)
+    await session.commit()
     
     return JSONResponse(
         content={"status": "ok"},

@@ -20,8 +20,8 @@ git pull origin fix/product-id-sequence
 ### Шаг 2: Перезапустить Docker
 
 ```bash
-docker-compose down
-docker-compose up -d
+sudo docker-compose down
+sudo docker-compose up -d
 ```
 
 ### Шаг 3: Исправить sequence в базе данных
@@ -29,34 +29,27 @@ docker-compose up -d
 **Вариант A: Через bash скрипт (рекомендуется)** ⭐
 
 ```bash
-# Сделать скрипт исполняемым
 chmod +x scripts/reset_sequence.sh
-
-# Запустить
-./scripts/reset_sequence.sh
+sudo ./scripts/reset_sequence.sh
 ```
 
 **Вариант B: Вручную через psql**
 
 ```bash
-# Подключиться к базе данных
-docker-compose exec postgres psql -U postgres -d buyout_bot
-
-# Выполнить команду сброса sequence
+# ОДНА команда
+sudo docker-compose exec postgres psql -U buyout_user -d buyout_bot -c "
 SELECT setval(
     pg_get_serial_sequence('products', 'id'),
     COALESCE((SELECT MAX(id) FROM products), 0) + 1,
     false
 );
-
-# Выйти
-\q
+"
 ```
 
 **Вариант C: Через Alembic**
 
 ```bash
-docker-compose exec bot alembic upgrade head
+sudo docker-compose exec bot alembic upgrade head
 ```
 
 ### Шаг 4: Проверить
@@ -69,7 +62,7 @@ docker-compose exec bot alembic upgrade head
 
 ```bash
 # Проверить текущее значение sequence
-docker-compose exec postgres psql -U postgres -d buyout_bot -c "
+sudo docker-compose exec postgres psql -U buyout_user -d buyout_bot -c "
 SELECT 
     'MAX ID' as info, COALESCE(MAX(id), 0) as value FROM products
 UNION ALL
@@ -90,50 +83,52 @@ Sequence должен быть больше чем MAX ID!
 
 ## Важная информация
 
-⚠️ **Параметры вашей БД (из docker-compose.yml):**
-- **Имя БД:** `buyout_bot` (не `buyout_bot_db`!)
-- **Пользователь:** `postgres` (не `buyout_user`!)
-- **Контейнер бота:** `bot` (не `buyout_bot`!)
+⚠️ **Параметры вашей БД (из .env и docker-compose.yml):**
+- **Имя БД:** `buyout_bot`
+- **Пользователь:** `buyout_user` 
+- **Контейнер бота:** `bot`
+- **Контейнер БД:** `postgres`
+
+⚠️ **Все команды docker-compose нужно запускать с `sudo`!**
 
 ## Если всё ещё не работает
 
 ### Проверить имя контейнера
 
 ```bash
-# Посмотреть список запущенных контейнеров
-docker-compose ps
+sudo docker-compose ps
 ```
 
 ### Посмотреть логи
 
 ```bash
 # Логи бота
-docker-compose logs -f bot
+sudo docker-compose logs -f bot
 
 # Логи PostgreSQL
-docker-compose logs -f postgres
+sudo docker-compose logs -f postgres
 ```
 
 ### Пересоздать базу данных (ВНИМАНИЕ: удалит все данные!)
 
 ```bash
 # Остановить контейнеры и удалить тома
-docker-compose down -v
+sudo docker-compose down -v
 
 # Запустить заново
-docker-compose up -d
+sudo docker-compose up -d
 
 # Применить миграцию
-docker-compose exec bot alembic upgrade head
+sudo docker-compose exec bot alembic upgrade head
 ```
 
 ## Что было исправлено
 
-✅ Исправлен импорт в `alembic/env.py` (DATABASE_URL → settings.DATABASE_URL)  
+✅ Исправлен импорт в `alembic/env.py`  
 ✅ Добавлен SQL скрипт для ручного сброса sequence  
-✅ Добавлен bash скрипт для автоматического сброса  
+✅ Добавлен bash скрипт с sudo и правильными параметрами  
 ✅ Миграция автоматически сбрасывает sequence  
-✅ Добавлена полная документация  
+✅ Все команды обновлены с правильными параметрами  
 
 ## Следующие шаги
 
@@ -146,5 +141,5 @@ docker-compose exec bot alembic upgrade head
 
 **Нужна помощь?** Откройте Issue на GitHub с описанием проблемы и вывод команды:
 ```bash
-docker-compose logs --tail=50 bot
+sudo docker-compose logs --tail=50 bot
 ```

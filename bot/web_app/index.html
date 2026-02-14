@@ -238,16 +238,24 @@
         }
         
         .btn-back {
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            background: var(--tg-theme-button-color, #3390ec);
+            color: white;
             border: none;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        
+        .btn-back:active {
+            transform: scale(0.9);
         }
         
         .modal-title {
@@ -472,6 +480,7 @@
                         <div class="product-header">
                             <span class="product-name">${escapeHtml(p.name)}</span>
                             <div class="toggle-switch ${p.is_active ? 'active' : ''}" 
+                                 id="toggle-${p.id}"
                                  onclick="toggleProduct(${p.id}, ${!p.is_active})">
                             </div>
                         </div>
@@ -660,8 +669,16 @@
             });
         }
 
-        // Переключить активность
+        // Переключить активность (БЕЗ ПЕРЕЗАГРУЗКИ!)
         async function toggleProduct(id, isActive) {
+            // Мгновенное изменение UI
+            const toggleEl = document.getElementById(`toggle-${id}`);
+            if (isActive) {
+                toggleEl.classList.add('active');
+            } else {
+                toggleEl.classList.remove('active');
+            }
+            
             try {
                 await fetch(`${API_BASE}/products/${id}/toggle`, {
                     method: 'POST',
@@ -671,8 +688,13 @@
                     },
                     body: JSON.stringify({ is_active: isActive })
                 });
-                loadProducts();
             } catch (error) {
+                // Если ошибка - вернуть назад
+                if (isActive) {
+                    toggleEl.classList.remove('active');
+                } else {
+                    toggleEl.classList.add('active');
+                }
                 showToast('❌ Ошибка');
             }
         }

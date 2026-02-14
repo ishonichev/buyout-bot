@@ -42,6 +42,7 @@
         }
         
         input[type="text"],
+        input[type="number"],
         textarea {
             width: 100%;
             padding: 12px;
@@ -63,6 +64,7 @@
             border-radius: 12px;
             padding: 16px;
             margin-bottom: 16px;
+            position: relative;
         }
         
         .product-header {
@@ -118,10 +120,22 @@
             cursor: pointer;
             transition: opacity 0.2s;
             width: 100%;
+            margin-top: 8px;
         }
         
         .btn:active {
             opacity: 0.8;
+        }
+
+        .btn-delete {
+            background: #ff3b30;
+            color: white;
+        }
+        
+        .btn-add {
+            background: #34c759;
+            color: white;
+            margin-bottom: 20px;
         }
         
         .loading {
@@ -140,6 +154,8 @@
 <body>
     <div class="container">
         <h1>🛠 Админ-панель</h1>
+        
+        <button class="btn btn-add" onclick="addProduct()">➕ Добавить товар</button>
         
         <!-- Товары -->
         <div id="products-list" class="loading">Загрузка...</div>
@@ -178,11 +194,17 @@
                                    id="product-name-${product.id}">
                         </div>
                         <div class="form-group">
+                            <label>Кешбек (руб.)</label>
+                            <input type="number" step="0.01" value="${product.cashback}" 
+                                   id="product-cashback-${product.id}">
+                        </div>
+                        <div class="form-group">
                             <label>Инструкция</label>
                             <textarea id="product-instruction-${product.id}">${product.instruction_text}</textarea>
-                            <div class="hint">Включите ссылку на товар, сумму кэшбэка и условия</div>
+                            <div class="hint">Включите ссылку на товар и условия</div>
                         </div>
-                        <button class="btn" onclick="saveProduct(${product.id})"> 💾 Сохранить</button>
+                        <button class="btn" onclick="saveProduct(${product.id})">💾 Сохранить</button>
+                        <button class="btn btn-delete" onclick="deleteProduct(${product.id})">🗑 Удалить</button>
                     </div>
                 `).join('');
             } catch (error) {
@@ -191,9 +213,37 @@
             }
         }
 
+        // Добавить товар
+        async function addProduct() {
+            try {
+                const response = await fetch(`${API_BASE}/products`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': tg.initData,
+                        'Content-Type': 'application/json; charset=utf-8'
+                    },
+                    body: JSON.stringify({
+                        name: 'Новый товар',
+                        cashback: 0,
+                        instruction_text: 'Инструкция'
+                    })
+                });
+                
+                if (response.ok) {
+                    tg.showAlert('✅ Товар добавлен!');
+                    loadProducts();
+                } else {
+                    tg.showAlert('❌ Ошибка добавления');
+                }
+            } catch (error) {
+                tg.showAlert('❌ Ошибка добавления');
+            }
+        }
+
         // Сохранение товара
         async function saveProduct(id) {
             const name = document.getElementById(`product-name-${id}`).value;
+            const cashback = parseFloat(document.getElementById(`product-cashback-${id}`).value);
             const instruction = document.getElementById(`product-instruction-${id}`).value;
 
             try {
@@ -203,11 +253,34 @@
                         'Authorization': tg.initData,
                         'Content-Type': 'application/json; charset=utf-8'
                     },
-                    body: JSON.stringify({ name, instruction_text: instruction })
+                    body: JSON.stringify({ name, cashback, instruction_text: instruction })
                 });
                 tg.showAlert('✅ Товар сохранен!');
             } catch (error) {
                 tg.showAlert('❌ Ошибка сохранения');
+            }
+        }
+
+        // Удалить товар
+        async function deleteProduct(id) {
+            if (!confirm('Удалить товар?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/products/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': tg.initData
+                    }
+                });
+                
+                if (response.ok) {
+                    tg.showAlert('✅ Товар удален!');
+                    loadProducts();
+                } else {
+                    tg.showAlert('❌ Ошибка удаления');
+                }
+            } catch (error) {
+                tg.showAlert('❌ Ошибка удаления');
             }
         }
 

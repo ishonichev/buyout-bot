@@ -148,7 +148,7 @@ async def payment_screenshot(message: Message, state: FSMContext, session: Async
         logger.error(f"Ошибка отправки пользователю: {e}")
     
     await message.answer(
-        f"✅ Заказ #{order_id} одобрен и записан в Google Sheets!\n"
+        f"✅ Заказ #{order_id} одобрен и записан в таблицу аналитики!\n"
         f"Пользователь {username} получил уведомление.\n"
         f"💰 Сумма кешбека: {cashback_amount} руб."
     )

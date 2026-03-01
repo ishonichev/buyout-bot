@@ -68,3 +68,5 @@ htmlcov/
 # Temp files
 *.tmp
 *.bak
+
+sheets_creds.json

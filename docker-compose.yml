@@ -18,6 +18,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 1G
 
   redis:
     image: redis:7-alpine
@@ -34,6 +39,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 1G
 
   bot:
     build: .
@@ -54,6 +64,11 @@ services:
       - bot_network
     restart: unless-stopped
     command: python main.py
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 1G
 
 volumes:
   postgres_data:

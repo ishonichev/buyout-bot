@@ -53,7 +53,7 @@ async def has_active_order(session: AsyncSession, user_id: int) -> bool:
 async def cmd_start(message: Message, session: AsyncSession, user: User, state: FSMContext, sheets_service: SheetsService):
     """Обработка команды /start."""
     # Аналитика
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="bot_started")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="bot_started")
     session.add(event)
     await session.commit()
     
@@ -85,7 +85,7 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
         return
     
     # Аналитика
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_1")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="button_1")
     session.add(event)
     await session.commit()
     
@@ -175,7 +175,7 @@ async def ask_support(message: Message, user: User):
 @router.callback_query(F.data == "empty")
 async def empty_product(callback: CallbackQuery):
     """Пустой слот товара."""
-    await callback.answer("❌ Товара пока нет", show_alert=True)
+    await callback.answer("❌ Товаров пока нет", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("product:"))
@@ -184,7 +184,7 @@ async def select_product_callback(callback: CallbackQuery, session: AsyncSession
     product_id = int(callback.data.split(":")[1])
     
     # Аналитика
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_2")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="button_2")
     session.add(event)
     await session.commit()
     
@@ -239,7 +239,7 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
     
     # СОЗДАЁМ ЗАКАЗ ТОЛЬКО ПОСЛЕ СОГЛАСИЯ!
     order = Order(
-        user_id=user.tg_id,
+        user_tg_id=user.tg_id,
         product_id=data['product_id'],
         status=OrderStatus.STARTED
     )
@@ -250,7 +250,7 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
     await state.update_data(order_id=order.id)
     
     # Аналитика
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_3")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="button_3")
     session.add(event)
     await session.commit()
     
@@ -321,7 +321,7 @@ async def basket_screenshot(message: Message, state: FSMContext, session: AsyncS
     await state.update_data(basket_photo=message.photo[-1].file_id)
     
     # Аналитика
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_4")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="button_4")
     session.add(event)
     await session.commit()
     
@@ -351,7 +351,7 @@ async def buy_screenshot(message: Message, state: FSMContext, session: AsyncSess
     
     await state.update_data(buy_photo=message.photo[-1].file_id)
     
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_5")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="button_5")
     session.add(event)
     await session.commit()
     
@@ -381,7 +381,7 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     
     await state.update_data(received_photo=message.photo[-1].file_id)
     
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_6")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="button_6")
     session.add(event)
     await session.commit()
     
@@ -411,7 +411,7 @@ async def review_screenshot(message: Message, state: FSMContext, session: AsyncS
     
     await state.update_data(review_photo=message.photo[-1].file_id)
     
-    event = AnalyticsEvent(user_id=user.tg_id, event_type="button_7")
+    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="button_7")
     session.add(event)
     await session.commit()
     

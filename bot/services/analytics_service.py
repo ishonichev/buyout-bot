@@ -23,7 +23,7 @@ class AnalyticsService:
                 from bot.database.models import AnalyticsEvent
                 
                 event = AnalyticsEvent(
-                    user_id=user_id,
+                    user_tg_id=user_id,
                     event_type=event_type
                 )
                 session.add(event)

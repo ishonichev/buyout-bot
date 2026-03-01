@@ -1,8 +1,8 @@
 """Модели базы данных."""
 from datetime import datetime
 from sqlalchemy import (CheckConstraint, BigInteger, String, Integer, Boolean,
-                        DateTime, Text, Enum as SQLEnum, Float)
-from sqlalchemy.orm import Mapped, mapped_column
+                        DateTime, Text, Enum as SQLEnum, Float, ForeignKey)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from bot.database.database import Base
 import enum
 

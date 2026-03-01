@@ -3,6 +3,7 @@ import asyncio
 import logging
 from pathlib import Path
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 import uvicorn
@@ -42,6 +43,12 @@ async def run_fastapi():
     server = uvicorn.Server(config)
     await server.serve()
 
+async def set_bot_commands(bot):
+    """Set up the commands that appear in the menu"""
+    commands = [
+        BotCommand(command="start", description="🚀 Запустить бота!"),        
+    ]
+    await bot.set_my_commands(commands)   
 
 async def main():
     """Основная функция запуска бота."""
@@ -84,6 +91,9 @@ async def main():
     # Инициализация бота и диспетчера
     bot = Bot(token=settings.BOT_TOKEN)
     dp = Dispatcher(storage=storage)
+
+    await set_bot_commands(bot)
+    logger.info("✅ Меню установлено")
     
     # Инициализация сервисов
     sheets_service = SheetsService()

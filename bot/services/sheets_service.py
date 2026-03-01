@@ -209,10 +209,10 @@ class SheetsService:
         try:
             order_id = order_data.get('order_id')
             username = order_data.get('username', 'Неизвестно')
-            basket_date = self._format_date(order_data.get('basket_date'))
-            buy_date = self._format_date(order_data.get('buy_date'))
-            received_date = self._format_date(order_data.get('received_date'))
-            review_date = self._format_date(order_data.get('review_date'))
+            basket_date = self._format_datetime(order_data.get('basket_date'))
+            buy_date = self._format_datetime(order_data.get('buy_date'))
+            received_date = self._format_datetime(order_data.get('received_date'))
+            review_date = self._format_datetime(order_data.get('review_date'))
             cashback = order_data.get('cashback_amount', 0)
             
             logger.info(f"📊 Записываю ПОЛНЫЙ заказ #{order_id}")
@@ -233,10 +233,10 @@ class SheetsService:
         except Exception as e:
             logger.error(f"❌ Ошибка записи заказа: {e}", exc_info=True)
     
-    def _format_date(self, date_value) -> str:
+    def _format_datetime(self, datetime_value) -> str:
         """Форматирование даты в строку."""
-        if isinstance(date_value, datetime):
-            return date_value.strftime("%d.%m.%Y")
-        elif isinstance(date_value, str):
-            return date_value
+        if isinstance(datetime_value, datetime):
+            return datetime_value.strftime("%d.%m.%Y %H:%M:%S")
+        elif isinstance(datetime_value, str):
+            return datetime_value
         return ""

@@ -20,7 +20,7 @@ async def has_active_order(session: AsyncSession, user_id: int) -> bool:
     """Проверка наличия активного заказа."""
     result = await session.execute(
         select(Order).where(
-            Order.user_id == user_id,
+            Order.user_tg_id == user_id,
             Order.status.in_([
                 OrderStatus.STARTED,
                 OrderStatus.BASKET_SENT,

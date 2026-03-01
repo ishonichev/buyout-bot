@@ -117,7 +117,7 @@ async def payment_screenshot(message: Message, state: FSMContext, session: Async
     
     # Получаем данные пользователя
     user_result = await session.execute(
-        select(User).where(User.tg_id == order.user_id)
+        select(User).where(User.tg_id == order.user_tg_id)
     )
     user = user_result.scalar_one_or_none()
     username = f"@{user.username}" if user and user.username else "Неизвестно"
@@ -140,7 +140,7 @@ async def payment_screenshot(message: Message, state: FSMContext, session: Async
     
     try:
         await message.bot.send_photo(
-            order.user_id,
+            order.user_tg_id,
             message.photo[-1].file_id,
             caption=payment_text
         )
@@ -194,7 +194,7 @@ async def rejection_reason(message: Message, state: FSMContext, session: AsyncSe
     # Отправляем пользователю
     try:
         await message.bot.send_message(
-            order.user_id,
+            order.user_tg_id,
             f"❌ Ваш заказ отклонен\n\n"
             f"📝 Причина: {message.text}"
         )

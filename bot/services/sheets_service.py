@@ -135,7 +135,7 @@ class SheetsService:
             async with async_session_maker() as session:
                 # Получаем уникальные пары (user_id, event_type)
                 result = await session.execute(
-                    select(AnalyticsEvent.user_id, AnalyticsEvent.event_type).distinct()
+                    select(AnalyticsEvent.user_tg_id, AnalyticsEvent.event_type).distinct()
                 )
                 
                 rows = result.all()

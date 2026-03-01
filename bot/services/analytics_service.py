@@ -61,7 +61,7 @@ class AnalyticsService:
                 
                 for event_type in event_types:
                     # Подсчитать уникальных пользователей
-                    query = select(func.count(func.distinct(AnalyticsEvent.user_id))).where(
+                    query = select(func.count(func.distinct(AnalyticsEvent.user_tg_id))).where(
                         AnalyticsEvent.event_type == event_type
                     )
                     result = await session.execute(query)

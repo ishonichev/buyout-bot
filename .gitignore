@@ -69,4 +69,4 @@ htmlcov/
 *.tmp
 *.bak
 
-sheets_creds.json
+*sheets_creds.json

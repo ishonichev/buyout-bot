@@ -80,7 +80,7 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     if await has_active_order(session, user.tg_id):
         await message.answer(
             "❌ У вас уже есть активный заказ!\n"
-            "Используйте кнопку \"Отменить прогресс\", чтобы начать заново."
+            "Используйте кнопку \"Отмена\", чтобы начать заново."
         )
         return
     
@@ -107,7 +107,7 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     )
 
 
-@router.message(F.text.contains("Отменить прогресс"))
+@router.message(F.text.contains("Отмена"))
 async def cancel_progress(message: Message, session: AsyncSession, user: User, state: FSMContext):
     """Отмена текущего заказа."""
     # Находим активный заказ

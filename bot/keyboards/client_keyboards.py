@@ -20,7 +20,7 @@ def get_main_menu_with_cancel() -> ReplyKeyboardMarkup:
     """Меню с кнопкой отмены прогресса."""
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="❌ Отменить прогресс")],
+            [KeyboardButton(text="❌ Отмена")],
             [KeyboardButton(text="👥 Поддержка")]
         ],
         resize_keyboard=True

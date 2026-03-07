@@ -53,10 +53,13 @@ async def has_active_order(session: AsyncSession, user_id: int) -> bool:
 async def cmd_start(message: Message, session: AsyncSession, user: User, state: FSMContext, sheets_service: SheetsService):
     """Обработка команды /start."""
     # Аналитика
-    known_user = (session.query(AnalyticsEvent).
-                  where(AnalyticsEvent.user_tg_id == user.tg_id).
-                  where(AnalyticsEvent.event_type == "bot_started").
-                  scalar_one_or_none())
+    result = await session.execute(
+        select(AnalyticsEvent).
+        where(AnalyticsEvent.user_tg_id == user.tg_id).
+        where(AnalyticsEvent.event_type == "bot_started")
+    )
+
+    known_user = result.scalar_one_or_none()
 
     if known_user is None:
         event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="bot_started")

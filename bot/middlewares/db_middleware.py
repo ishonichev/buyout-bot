@@ -32,8 +32,7 @@ class DatabaseMiddleware(BaseMiddleware):
                 )
                 user = result.scalar_one_or_none()
                 
-                # Если нет - создаем
-                if not user:
+                if user is None:
                     user = User(
                         tg_id=tg_user.id,
                         username=tg_user.username,

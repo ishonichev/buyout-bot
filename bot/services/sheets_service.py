@@ -21,15 +21,15 @@ class SheetsService:
         self.sheet2 = None  # Лист "Аналитика"
         
         # Кэш УНИКАЛЬНЫХ пользователей для каждого события
-        self.unique_users: Dict[str, Set[int]] = {
-            'bot_started': set(),
-            'button_1': set(),
-            'button_2': set(),
-            'button_3': set(),
-            'button_4': set(),
-            'button_5': set(),
-            'button_6': set(),
-            'button_7': set(),
+        self.usage_stats: dict[str, int] = {
+            'bot_started': 0,
+            'button_1': 0,
+            'button_2': 0,
+            'button_3': 0,
+            'button_4': 0,
+            'button_5': 0,
+            'button_6': 0,
+            'button_7': 0,
         }
         self._update_task = None
         
@@ -55,7 +55,7 @@ class SheetsService:
             await self._ensure_headers_exist()
             
             # Загружаем уникальных пользователей из БД
-            await self._load_unique_users_from_db()
+            await self._load_usage_stats_from_db()
             
             # Запускаем периодическое обновление (каждые 5 мин)
             self._update_task = asyncio.create_task(self._periodic_sync())
@@ -125,28 +125,46 @@ class SheetsService:
             await self.sheet2.update('B3:I3', [["100%"] + ["0%"] * 7])
             logger.info("Заголовки Листа 2 созданы")
     
-    async def _load_unique_users_from_db(self):
+    async def _load_usage_stats_from_db(self):
         """Загрузить уникальных пользователей из базы данных."""
         try:
             from bot.database.database import async_session_maker
             from bot.database.models import AnalyticsEvent
             from sqlalchemy import select
-            
+
             async with async_session_maker() as session:
-                # Получаем уникальные пары (user_id, event_type)
+                # Get counts for all events (excluding bot_%)
                 result = await session.execute(
-                    select(AnalyticsEvent.user_tg_id, AnalyticsEvent.event_type).distinct()
+                    select(
+                        AnalyticsEvent.event_type,
+                        func.count(AnalyticsEvent.id).label('count')
+                    )
+                    .where(AnalyticsEvent.event_type != 'bot_started')
+                    .group_by(AnalyticsEvent.event_type)
                 )
-                
-                rows = result.all()
-                for user_id, event_type in rows:
-                    if event_type in self.unique_users:
-                        self.unique_users[event_type].add(user_id)
-                
-            counts = {k: len(v) for k, v in self.unique_users.items()}
-            logger.info(f"Уникальные пользователи загружены: {counts}")
+                regular_rows = result.all()
+
+                # Get count for bot started specifically
+                bot_result = await session.execute(
+                    select(
+                        AnalyticsEvent.event_type,
+                        func.count(AnalyticsEvent.id).label('count')
+                    )
+                    .where(AnalyticsEvent.event_type == 'bot_started')
+                    .group_by(AnalyticsEvent.event_type)
+                )
+                bot_rows = bot_result.all()
+
+                # Combine or use separately
+                all_rows = regular_rows + bot_rows
+
+                for event_type, event_count in all_rows:
+                    if event_type in self.usage_stats:
+                        self.usage_stats[event_type] = event_count
+
+            logger.info(f"Статистка использования загружена")
         except Exception as e:
-            logger.error(f"Ошибка загрузки уникальных пользователей: {e}")
+            logger.error("Ошибка загрузки статистики использования: %s", str(e))
     
     async def _periodic_sync(self):
         """Периодическая синхронизация с Google Sheets (каждые 5 мин)."""
@@ -163,25 +181,16 @@ class SheetsService:
             logger.info("Синхронизация аналитики с Google Sheets...")
             
             # Обновляем количество (строка 2) - ТЕПЕРЬ УНИКАЛЬНЫЕ ПОЛЬЗОВАТЕЛИ
-            counts = [
-                len(self.unique_users['bot_started']),
-                len(self.unique_users['button_1']),
-                len(self.unique_users['button_2']),
-                len(self.unique_users['button_3']),
-                len(self.unique_users['button_4']),
-                len(self.unique_users['button_5']),
-                len(self.unique_users['button_6']),
-                len(self.unique_users['button_7']),
-            ]
+
             
-            await self.sheet2.update('B2:I2', [counts])
+            await self.sheet2.update('B2:I2', list(self.usage_stats.values()))
             
             # Пересчитываем проценты
             percentages = []
-            
+            counts = list(self.usage_stats.values())
             for i, count in enumerate(counts):
                 if i == 0:
-                    percentages.append("100%")
+                    percentages.append("--")
                 else:
                     prev_count = counts[i - 1] if i > 0 else 1
                     if prev_count > 0:
@@ -196,13 +205,12 @@ class SheetsService:
         except Exception as e:
             logger.error(f"Ошибка синхронизации: {e}")
     
-    def increment_analytics_event(self, event_type: str, user_id: int):
+    def increment_analytics_event(self, event_type: str):
         """ДОБАВИТЬ УНИКАЛЬНОГО пользователя в множество (быстро, не блокирует)."""
-        if event_type in self.unique_users:
-            was_new = user_id not in self.unique_users[event_type]
-            self.unique_users[event_type].add(user_id)
-            if was_new:
-                logger.info(f"📊 {event_type}: +1 уникальный пользователь (user_id={user_id}), всего: {len(self.unique_users[event_type])}")
+        if event_type in self.usage_stats:
+            self.usage_stats[event_type] += 1
+
+            logger.info(f"📊 {event_type}: +1 уникальный пользователь, всего: {self.usage_stats[event_type]}")
     
     async def add_order_to_sheet1(self, order_data: Dict[str, Any]):
         """Добавление ПОЛНОЙ заявки в Лист 1 (только в конце!)."""

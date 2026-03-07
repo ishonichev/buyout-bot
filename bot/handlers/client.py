@@ -53,12 +53,16 @@ async def has_active_order(session: AsyncSession, user_id: int) -> bool:
 async def cmd_start(message: Message, session: AsyncSession, user: User, state: FSMContext, sheets_service: SheetsService):
     """Обработка команды /start."""
     # Аналитика
-    event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="bot_started")
-    session.add(event)
-    await session.commit()
-    
-    if sheets_service:
-        sheets_service.increment_analytics_event("bot_started", user.tg_id)
+    known_user = (session.query(AnalyticsEvent).
+                  where(AnalyticsEvent.user_tg_id == user.tg_id).
+                  where(AnalyticsEvent.event_type == "bot_started").
+                  scalar_one_or_none())
+
+    if known_user is None:
+        event = AnalyticsEvent(user_tg_id=user.tg_id, event_type="bot_started")
+        session.add(event)
+        await session.commit()
+        sheets_service.increment_analytics_event("bot_started")
     
     # Получаем текст из конфига
     welcome_text = await get_config_text(session, "welcome_message")
@@ -90,7 +94,7 @@ async def select_product(message: Message, session: AsyncSession, user: User, sh
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_1", user.tg_id)
+        sheets_service.increment_analytics_event("button_1")
     
     # Получаем все активные товары (без лимита 4)
     result = await session.execute(
@@ -125,9 +129,8 @@ async def cancel_progress(message: Message, session: AsyncSession, user: User, s
     )
     order = result.scalar_one_or_none()
     
-    if order:
-        # Отменяем заказ
-        await session.delete(order)
+    if order is not None:
+        order.status = OrderStatus.CANCELED
         await session.commit()
         
         # Очищаем FSM
@@ -189,7 +192,7 @@ async def select_product_callback(callback: CallbackQuery, session: AsyncSession
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_2", user.tg_id)
+        sheets_service.increment_analytics_event("button_2")
     
     # Получаем товар
     result = await session.execute(
@@ -255,7 +258,7 @@ async def agree_instruction(callback: CallbackQuery, state: FSMContext, session:
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_3", user.tg_id)
+        sheets_service.increment_analytics_event("button_3")
     
     # Устанавливаем состояние
     await state.set_state(ClientStates.WAITING_BASKET_SCREENSHOT)
@@ -326,7 +329,7 @@ async def basket_screenshot(message: Message, state: FSMContext, session: AsyncS
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_4", user.tg_id)
+        sheets_service.increment_analytics_event("button_4")
     
     # Переходим к Шагу 2
     await state.set_state(ClientStates.WAITING_BUY_SCREENSHOT)
@@ -356,7 +359,7 @@ async def buy_screenshot(message: Message, state: FSMContext, session: AsyncSess
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_5", user.tg_id)
+        sheets_service.increment_analytics_event("button_5")
     
     # Переходим к Шагу 3
     await state.set_state(ClientStates.WAITING_RECEIVED_SCREENSHOT)
@@ -386,7 +389,7 @@ async def received_screenshot(message: Message, state: FSMContext, session: Asyn
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_6", user.tg_id)
+        sheets_service.increment_analytics_event("button_6")
     
     # Переходим к Шагу 4 (отзыв)
     await state.set_state(ClientStates.WAITING_REVIEW_SCREENSHOT)
@@ -416,7 +419,7 @@ async def review_screenshot(message: Message, state: FSMContext, session: AsyncS
     await session.commit()
     
     if sheets_service:
-        sheets_service.increment_analytics_event("button_7", user.tg_id)
+        sheets_serviceincrement_analytics_event("button_7")
     
     # Переходим к Шагу 5 (реквизиты)
     await state.set_state(ClientStates.WAITING_PAYMENT_DETAILS)

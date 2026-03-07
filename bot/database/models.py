@@ -9,15 +9,16 @@ import enum
 
 class OrderStatus(enum.Enum):
     """Статусы заказа."""
-    STARTED = "started"  # Начато
-    BASKET_SENT = "basket_sent"  # Отправлен скриншот корзины
-    BUY_SENT = "buy_sent"  # Отправлен скриншот покупки
-    RECEIVED = "received"  # Товар на руках
-    REVIEW_SENT = "review_sent"  # Отзыв отправлен
-    PENDING_APPROVAL = "pending_approval"  # Ожидает подтверждения
-    ADMIN_PAYMENT_SENT = "admin_payment_sent"  # Админ отправил скрин перевода
-    COMPLETED = "completed"  # Завершено
-    REJECTED = "rejected"  # Отклонен
+    STARTED = "started"
+    BASKET_SENT = "basket_sent"
+    BUY_SENT = "buy_sent"
+    RECEIVED = "received"
+    REVIEW_SENT = "review_sent"
+    PENDING_APPROVAL = "pending_approval"
+    ADMIN_PAYMENT_SENT = "admin_payment_sent"
+    COMPLETED = "completed"
+    REJECTED = "rejected"
+    CANCELED = "canceled"
 
 
 class User(Base):

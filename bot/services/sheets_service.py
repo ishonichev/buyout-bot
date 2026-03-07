@@ -6,6 +6,9 @@ import gspread_asyncio
 from google.oauth2.service_account import Credentials
 from bot.config import settings
 import asyncio
+from bot.database.database import async_session_maker
+from bot.database.models import AnalyticsEvent
+from sqlalchemy import func, select 
 
 logger = logging.getLogger(__name__)
 
@@ -128,10 +131,7 @@ class SheetsService:
     async def _load_usage_stats_from_db(self):
         """Загрузить уникальных пользователей из базы данных."""
         try:
-            from bot.database.database import async_session_maker
-            from bot.database.models import AnalyticsEvent
-            from sqlalchemy import select
-
+            
             async with async_session_maker() as session:
                 # Get counts for all events (excluding bot_%)
                 result = await session.execute(
@@ -162,7 +162,7 @@ class SheetsService:
                     if event_type in self.usage_stats:
                         self.usage_stats[event_type] = event_count
 
-            logger.info(f"Статистка использования загружена")
+            logger.info(f"Статистка использования загружена")            
         except Exception as e:
             logger.error("Ошибка загрузки статистики использования: %s", str(e))
     
@@ -181,13 +181,13 @@ class SheetsService:
             logger.info("Синхронизация аналитики с Google Sheets...")
             
             # Обновляем количество (строка 2) - ТЕПЕРЬ УНИКАЛЬНЫЕ ПОЛЬЗОВАТЕЛИ
-
             
-            await self.sheet2.update('B2:I2', list(self.usage_stats.values()))
+            await self.sheet2.update('B2:I2', [list(self.usage_stats.values())])
             
             # Пересчитываем проценты
             percentages = []
-            counts = list(self.usage_stats.values())
+            counts = list(self.usage_stats.values())            
+            
             for i, count in enumerate(counts):
                 if i == 0:
                     percentages.append("--")
@@ -197,8 +197,8 @@ class SheetsService:
                         percentage = (count / prev_count) * 100
                         percentages.append(f"{percentage:.1f}%")
                     else:
-                        percentages.append("0%")
-            
+                        percentages.append("0%")           
+                        
             await self.sheet2.update('B3:I3', [percentages])
             logger.info(f"Аналитика синхронизирована: {counts}")
             
@@ -210,7 +210,7 @@ class SheetsService:
         if event_type in self.usage_stats:
             self.usage_stats[event_type] += 1
 
-            logger.info(f"📊 {event_type}: +1 уникальный пользователь, всего: {self.usage_stats[event_type]}")
+            logger.info(f"📊 {event_type}: +1 пользователь, всего: {self.usage_stats[event_type]}")
     
     async def add_order_to_sheet1(self, order_data: Dict[str, Any]):
         """Добавление ПОЛНОЙ заявки в Лист 1 (только в конце!)."""
